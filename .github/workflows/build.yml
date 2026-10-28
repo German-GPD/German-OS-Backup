@@ -1,7 +1,7 @@
 name: Build and package Windows installer
 on:
   push:
-    branches: [main]
+    branches: [main, rust-migration]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -19,9 +19,9 @@ jobs:
         id: version
         shell: pwsh
         run: echo "version=$((Get-Content version.txt -Raw).Trim())" >> $env:GITHUB_OUTPUT
-      - uses: actions/setup-dotnet@v4
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          dotnet-version: 10.0.x
+          targets: x86_64-pc-windows-msvc
       - name: Generate branded Windows icon
         shell: pwsh
         run: |
@@ -40,8 +40,13 @@ jobs:
           $stream = [System.IO.File]::Create("src/GermanOSBackup/app.ico")
           $icon.Save($stream); $stream.Dispose()
           $icon.Dispose(); $g.Dispose(); $bitmap.Dispose(); $frame.Dispose(); $green.Dispose()
-      - name: Publish self-contained application
-        run: dotnet publish .\src\GermanOSBackup\GermanOSBackup.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:Version=${{ steps.version.outputs.version }} -o .\publish
+      - name: Build native Rust application
+        run: cargo build --release --target x86_64-pc-windows-msvc
+      - name: Prepare installer payload
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path .\publish | Out-Null
+          Copy-Item .\target\x86_64-pc-windows-msvc\release\GermanOSBackup.exe .\publish\GermanOSBackup.exe
       - name: Install Inno Setup
         run: choco install innosetup --yes --no-progress
       - name: Build installer
