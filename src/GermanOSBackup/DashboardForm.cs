@@ -134,7 +134,7 @@ internal sealed class DashboardForm : Form
 
         var statusCard = CreateCard();
         statusCard.Padding = new Padding(22, 17, 22, 16);
-        var statusLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 3, BackColor = Palette.Panel, Margin = Padding.Empty };
+        var statusLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 4, BackColor = Palette.Panel, Margin = Padding.Empty };
         statusLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         statusLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 164));
         statusLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 25));
@@ -342,7 +342,7 @@ internal sealed class DashboardForm : Form
     private void SetBusy(bool busy)
     {
         operationBusy = busy;
-        if (stopButton is not null) stopButton.Enabled = busy || Volatile.Read(ref engine.Stats.IsScanning);
+        if (stopButton is not null) stopButton.Enabled = busy || engine.Stats.IsScanning;
     }
 
     private void RefreshStats()
