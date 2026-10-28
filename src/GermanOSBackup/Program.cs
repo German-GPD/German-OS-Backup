@@ -61,9 +61,22 @@ internal static class Program
         if (string.Equals(Path.GetPathRoot(full), windowsDrive, StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException("Для копии выбери другой диск, не системный.");
         if (string.IsNullOrWhiteSpace(full) || full.Length < 3) throw new InvalidDataException("Выбери отдельную папку, а не корень диска.");
-        foreach (var (_, source) in BackupEngine.Sources())
-            if (full.Equals(source, StringComparison.OrdinalIgnoreCase) || full.StartsWith(source.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase))
-                throw new InvalidDataException("Папка резервной копии не должна находиться внутри исходной папки.");
+        var selectedSources = configSourcesForValidation();
+        foreach (var source in selectedSources)
+        {
+            var sourceFull = Path.GetFullPath(source).TrimEnd(Path.DirectorySeparatorChar);
+            if (full.Equals(sourceFull, StringComparison.OrdinalIgnoreCase) ||
+                full.StartsWith(sourceFull + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
+                sourceFull.StartsWith(full + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Папка резервной копии не должна совпадать с выбранной папкой, находиться внутри неё или быть её родительской папкой.");
+        }
+
+        IEnumerable<string> configSourcesForValidation()
+        {
+            var config = LoadConfig();
+            if (config?.SelectedSources is { Count: > 0 }) return config.SelectedSources;
+            return BackupEngine.Sources().Select(x => x.Path);
+        }
     }
 }
 
