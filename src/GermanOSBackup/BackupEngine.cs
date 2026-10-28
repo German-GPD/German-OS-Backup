@@ -41,8 +41,17 @@ internal sealed class BackupEngine : IDisposable
     }
     public static IEnumerable<(string Name, string Path)> Sources()
     {
-        var drive = Path.GetPathRoot(Environment.GetFolderPath(Environment.SpecialFolder.Windows))!;
-        yield return ("Users", Path.Combine(drive, "Users")); yield return ("ProgramData", Path.Combine(drive, "ProgramData")); yield return ("XboxGames", Path.Combine(drive, "XboxGames"));
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var candidates = new[]
+        {
+            ("Рабочий стол", Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory)),
+            ("Документы", Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)),
+            ("Изображения", Environment.GetFolderPath(Environment.SpecialFolder.MyPictures)),
+            ("Видео", Environment.GetFolderPath(Environment.SpecialFolder.MyVideos)),
+            ("Загрузки", Path.Combine(home, "Downloads"))
+        };
+        foreach (var item in candidates)
+            if (!string.IsNullOrWhiteSpace(item.Item2)) yield return item;
     }
 
     public Task StartAsync()
