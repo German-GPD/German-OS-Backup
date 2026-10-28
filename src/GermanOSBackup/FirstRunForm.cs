@@ -4,10 +4,12 @@ internal sealed class FirstRunForm : Form
 {
     private readonly TextBox path = new() { ReadOnly = true, BackColor = Palette.Panel, ForeColor = Palette.Text, BorderStyle = BorderStyle.FixedSingle };
     public string? Destination => path.Text;
+    public bool StartWithWindows => startWithWindows.Checked;
+    private readonly CheckBox startWithWindows = new() { Text = "Запускать вместе с Windows и работать в фоне", Checked = true, AutoSize = true, ForeColor = Palette.Text, BackColor = Palette.Background };
 
     public FirstRunForm()
     {
-        Text = "Первый запуск · German OS Backup"; ClientSize = new Size(650, 450);
+        Text = "Первый запуск · German OS Backup"; ClientSize = new Size(650, 490);
         FormBorderStyle = FormBorderStyle.FixedDialog; MaximizeBox = false; MinimizeBox = false;
         StartPosition = FormStartPosition.CenterScreen; BackColor = Palette.Background; ForeColor = Palette.Text; Font = Palette.Font;
         var badge = Palette.Label("ПЕРВЫЙ ЗАПУСК", 10, Palette.Green, true); badge.SetBounds(30, 25, 250, 22); Controls.Add(badge);
@@ -27,7 +29,9 @@ internal sealed class FirstRunForm : Form
             try { Program.ValidateDestination(dialog.SelectedPath); path.Text = dialog.SelectedPath; }
             catch (Exception ex) { MessageBox.Show(this, ex.Message, "Неподходящая папка", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
         };
-        var start = Palette.Button("Начать полное копирование  →", true); start.SetBounds(330, 366, 290, 46); Controls.Add(start);
+        startWithWindows.SetBounds(32, 355, 570, 26); Controls.Add(startWithWindows);
+        var startupHint = Palette.Label("Можно изменить позже в настройках приложения.", 9, Palette.Muted); startupHint.SetBounds(32, 382, 570, 20); Controls.Add(startupHint);
+        var start = Palette.Button("Продолжить настройку  →", true); start.SetBounds(330, 425, 290, 42); Controls.Add(start);
         start.Click += (_, _) =>
         {
             if (string.IsNullOrWhiteSpace(path.Text)) { MessageBox.Show(this, "Сначала выбери папку на другом диске."); return; }
