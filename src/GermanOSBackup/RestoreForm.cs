@@ -53,11 +53,9 @@ internal sealed class RestoreForm : Form
             MessageBox.Show(this, "Выбери существующую папку копии и папку назначения.", "Восстановление", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
-        source = Path.GetFullPath(source).TrimEnd(Path.DirectorySeparatorChar);
-        target = Path.GetFullPath(target).TrimEnd(Path.DirectorySeparatorChar);
-        if (string.Equals(source, target, StringComparison.OrdinalIgnoreCase) ||
-            source.StartsWith(target + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
-            target.StartsWith(source + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+        source = NormalizeDirectoryPath(source);
+        target = NormalizeDirectoryPath(target);
+        if (IsSameOrNested(source, target) || IsSameOrNested(target, source))
         {
             MessageBox.Show(this, "Папка источника и папка назначения не должны пересекаться.", "Небезопасный путь", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
@@ -70,14 +68,22 @@ internal sealed class RestoreForm : Form
         {
             await Task.Run(() =>
             {
-                var files = Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories).ToArray();
-                var total = Math.Max(1, files.Length); int done = 0;
+                var files = EnumerateFilesSafely(source, cancel.Token, ex =>
+                {
+                    Interlocked.Increment(ref errors);
+                    try { File.AppendAllText(Program.LogPath, $"[{DateTime.Now:O}] RESTORE ENUMERATION: {ex}{Environment.NewLine}"); } catch { }
+                });
+                var total = Math.Max(1, files.Count); int done = 0;
                 foreach (var file in files)
                 {
                     cancel.Token.ThrowIfCancellationRequested();
                     var relative = Path.GetRelativePath(source, file);
                     var destination = Path.GetFullPath(Path.Combine(target, relative));
-                    if (!destination.StartsWith(target + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) { Interlocked.Increment(ref errors); continue; }
+                    if (!IsSameOrNested(destination, target) || string.Equals(destination, target, StringComparison.OrdinalIgnoreCase))
+                    {
+                        Interlocked.Increment(ref errors);
+                        continue;
+                    }
                     try
                     {
                         if (File.Exists(destination)) Interlocked.Increment(ref skipped);
@@ -85,13 +91,26 @@ internal sealed class RestoreForm : Form
                         {
                             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
                             var temp = destination + ".gob-restore-" + Guid.NewGuid().ToString("N") + ".tmp";
-                            try { File.Copy(file, temp, false); File.Move(temp, destination, false); Interlocked.Increment(ref restored); }
+                            try
+                            {
+                                File.Copy(file, temp, false);
+                                File.Move(temp, destination, false);
+                                Interlocked.Increment(ref restored);
+                            }
                             finally { try { if (File.Exists(temp)) File.Delete(temp); } catch { } }
                         }
                     }
-                    catch (Exception ex) { Interlocked.Increment(ref errors); File.AppendAllText(Program.LogPath, $"[{DateTime.Now:O}] RESTORE {file}: {ex}{Environment.NewLine}"); }
+                    catch (Exception ex)
+                    {
+                        Interlocked.Increment(ref errors);
+                        try { File.AppendAllText(Program.LogPath, $"[{DateTime.Now:O}] RESTORE {file}: {ex}{Environment.NewLine}"); } catch { }
+                    }
                     done++;
-                    if (done % 20 == 0 || done == total) BeginInvoke(() => progress.Value = Math.Min(100, (int)(done * 100L / total)));
+                    if (done % 20 == 0 || done == total)
+                    {
+                        var value = Math.Min(100, (int)(done * 100L / total));
+                        if (!IsDisposed && IsHandleCreated) BeginInvoke(new Action(() => progress.Value = value));
+                    }
                 }
             }, cancel.Token);
             summary.Text = $"Готово. Восстановлено: {restored:N0}; пропущено существующих: {skipped:N0}; ошибок: {errors:N0}.";
@@ -100,6 +119,61 @@ internal sealed class RestoreForm : Form
         catch (OperationCanceledException) { summary.Text = $"Остановлено. Восстановлено: {restored:N0}; пропущено: {skipped:N0}; ошибок: {errors:N0}."; }
         catch (Exception ex) { summary.Text = "Не удалось выполнить восстановление."; MessageBox.Show(this, ex.Message, "Ошибка восстановления", MessageBoxButtons.OK, MessageBoxIcon.Error); }
         finally { running = false; restore.Enabled = true; }
+    }
+
+    private static string NormalizeDirectoryPath(string path)
+    {
+        var full = Path.GetFullPath(path);
+        var root = Path.GetPathRoot(full);
+        return string.Equals(full, root, StringComparison.OrdinalIgnoreCase)
+            ? full
+            : full.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+    }
+
+    private static bool IsSameOrNested(string candidate, string parent)
+    {
+        candidate = NormalizeDirectoryPath(candidate);
+        parent = NormalizeDirectoryPath(parent);
+        if (string.Equals(candidate, parent, StringComparison.OrdinalIgnoreCase)) return true;
+        var prefix = parent.EndsWith(Path.DirectorySeparatorChar) ? parent : parent + Path.DirectorySeparatorChar;
+        return candidate.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static List<string> EnumerateFilesSafely(string root, CancellationToken token, Action<Exception> onError)
+    {
+        var files = new List<string>();
+        var stack = new Stack<string>();
+        stack.Push(root);
+        while (stack.Count > 0)
+        {
+            token.ThrowIfCancellationRequested();
+            var current = stack.Pop();
+            try
+            {
+                foreach (var file in Directory.EnumerateFiles(current))
+                {
+                    token.ThrowIfCancellationRequested();
+                    files.Add(file);
+                }
+            }
+            catch (Exception ex) { onError(ex); }
+
+            try
+            {
+                foreach (var directory in Directory.EnumerateDirectories(current))
+                {
+                    token.ThrowIfCancellationRequested();
+                    try
+                    {
+                        if ((File.GetAttributes(directory) & FileAttributes.ReparsePoint) == 0)
+                            stack.Push(directory);
+                    }
+                    catch (Exception ex) { onError(ex); }
+                }
+            }
+            catch (Exception ex) { onError(ex); }
+        }
+        return files;
     }
 
     protected override void OnFormClosed(FormClosedEventArgs e) { cancel.Cancel(); cancel.Dispose(); base.OnFormClosed(e); }
