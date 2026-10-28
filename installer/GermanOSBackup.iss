@@ -1,5 +1,7 @@
 #define AppName "German OS Backup"
-#define AppVersion "1.1.0"
+#ifndef AppVersion
+  #define AppVersion "1.2.0"
+#endif
 #define AppPublisher "German-GPD"
 #define AppExeName "GermanOSBackup.exe"
 
