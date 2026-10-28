@@ -2,7 +2,7 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType><TargetFramework>net10.0-windows</TargetFramework><UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><AssemblyName>GermanOSBackup</AssemblyName><RootNamespace>GermanOSBackup</RootNamespace>
-    <Version>1.0.0</Version><Authors>German-GPD</Authors><Description>Local Windows backup with a desktop dashboard.</Description>
+    <ApplicationIcon>app.ico</ApplicationIcon><Version>1.0.0</Version><Authors>German-GPD</Authors><Description>Local Windows backup with a desktop dashboard.</Description>
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 </Project>
