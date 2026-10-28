@@ -12,7 +12,7 @@
 | **Rust Edition** | Нативный интерфейс, SHA-256, восстановление отсутствующих файлов, ZIP-архив | [**↓ Скачать Rust Edition**](https://github.com/German-GPD/German-OS-Backup/releases/latest/download/GermanOSBackup-Rust-Setup-x64.exe) |
 | **C# Edition** | Windows Forms + WebView2, системный трей, журнал, режимы нагрузки, проверка обновлений | [**↓ Скачать C# Edition**](https://github.com/German-GPD/German-OS-Backup/releases/latest/download/GermanOSBackup-CS-Setup-x64.exe) |
 
-Оба установщика публикуются **одним релизом**, только если сборка обеих редакций завершилась успешно. Имена приложений не пересекаются: `GermanOSBackup-Rust.exe` и `GermanOSBackup-CS.exe`.
+Оба установщика публикуются **одним релизом**, только если сборка обеих редакций завершилась успешно. В релиз также входит `SHA256SUMS.txt` с контрольными суммами обоих EXE. Имена приложений не пересекаются: `GermanOSBackup-Rust.exe` и `GermanOSBackup-CS.exe`.
 
 ## Структура веток
 
