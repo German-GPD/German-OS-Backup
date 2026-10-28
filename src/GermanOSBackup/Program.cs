@@ -81,7 +81,7 @@ internal static class Program
 
     internal static void ConfigureStartup(bool enabled)
     {
-        using var key = Registry.CurrentUser.OpenSubKey(@"Software\\Microsoft\\Windows\\CurrentVersion\\Run", writable: true)
+        using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", writable: true)
             ?? Registry.CurrentUser.CreateSubKey(@"Software\\Microsoft\\Windows\\CurrentVersion\\Run", writable: true);
         if (enabled)
             key.SetValue("GermanOSBackup", $"\\"{Application.ExecutablePath}\\" --background");
