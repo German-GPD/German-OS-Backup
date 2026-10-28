@@ -157,13 +157,18 @@ internal sealed class BackupEngine : IDisposable
 
     private IEnumerable<(string Name, string Path, string TargetRoot)> ConfiguredSources()
     {
-        var selected = config.SelectedSources?.Where(Directory.Exists).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        if (selected is not { Count: > 0 })
+        // Only use defaults for a genuinely fresh configuration. If saved paths
+        // are missing, do not silently back up unrelated folders instead.
+        var configured = config.SelectedSources;
+        if (configured is not { Count: > 0 })
         {
             foreach (var (name, path) in Sources())
                 if (Directory.Exists(path)) yield return (name, path, Path.Combine(config.Destination, name));
             yield break;
         }
+
+        var selected = configured.Where(Directory.Exists).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (selected.Count == 0) yield break;
 
         var roots = selected.Where(path => !selected.Any(other =>
             !string.Equals(path, other, StringComparison.OrdinalIgnoreCase) &&
