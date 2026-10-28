@@ -29,9 +29,19 @@ jobs:
           name: GermanOSBackup-win-x64
           path: GermanOSBackup-win-x64.zip
           if-no-files-found: error
-      - name: Attach tagged release
-        if: startsWith(github.ref, 'refs/tags/v')
+          retention-days: 90
+      - name: Publish stable download
+        if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v1.0.0
+          target_commitish: main
+          name: German OS Backup — Windows x64
+          body: |
+            Стабильная сборка German OS Backup для Windows x64.
+
+            Скачайте GermanOSBackup-win-x64.zip, распакуйте архив и запустите GermanOSBackup.exe.
+            Программа пока не подписана цифровым сертификатом; Windows SmartScreen может показать предупреждение.
           files: GermanOSBackup-win-x64.zip
-          generate_release_notes: true
+          make_latest: true
+          fail_on_unmatched_files: true
