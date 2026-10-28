@@ -19,10 +19,14 @@ const RELEASES: &str = "https://github.com/German-GPD/German-OS-Backup/releases/
 
 #[derive(Clone, Serialize, Deserialize)]
 struct Config {
+    #[serde(rename = "Destination", alias = "destination")]
     destination: String,
+    #[serde(rename = "SelectedSources", alias = "sources", default)]
     sources: Vec<String>,
+    #[serde(rename = "PerformanceMode", alias = "performance_mode", default = "default_mode")]
     performance_mode: String,
 }
+fn default_mode() -> String { "balanced".into() }
 impl Default for Config {
     fn default() -> Self {
         let home = std::env::var("USERPROFILE").unwrap_or_else(|_| ".".into());
@@ -81,9 +85,9 @@ impl BackupApp {
         style.spacing.item_spacing = Vec2::new(10.0, 9.0);
         cc.egui_ctx.set_style(style);
 
-        let project = ProjectDirs::from("com", "German-GPD", "GermanOSBackup")
-            .expect("Windows user data directory is unavailable");
-        let config_path = project.config_dir().join("config.json");
+        // Keep the same per-user config location as the previous C# version.
+        let local_app_data = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| ".".into());
+        let config_path = PathBuf::from(local_app_data).join("GermanOSBackup").join("config.json");
         let config = fs::read_to_string(&config_path)
             .ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
         let stats = Arc::new(Mutex::new(Stats { status: "Готово к работе".into(), ..Default::default() }));
@@ -99,7 +103,14 @@ impl BackupApp {
         if let Some(parent) = self.config_path.parent() { let _ = fs::create_dir_all(parent); }
         if let Ok(json) = serde_json::to_string_pretty(&self.config) {
             let temp = self.config_path.with_extension("json.tmp");
-            if fs::write(&temp, json).is_ok() { let _ = fs::rename(temp, &self.config_path); }
+            if fs::write(&temp, json).is_ok() {
+                // Windows rename cannot replace an existing destination; replace safely.
+                let backup = self.config_path.with_extension("json.bak");
+                let _ = fs::remove_file(&backup);
+                if self.config_path.exists() { let _ = fs::rename(&self.config_path, &backup); }
+                if fs::rename(&temp, &self.config_path).is_ok() { let _ = fs::remove_file(backup); }
+                else if backup.exists() { let _ = fs::rename(backup, &self.config_path); }
+            }
         }
     }
 
