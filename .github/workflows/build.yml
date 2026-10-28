@@ -41,7 +41,7 @@ jobs:
           $icon.Save($stream); $stream.Dispose()
           $icon.Dispose(); $g.Dispose(); $bitmap.Dispose(); $frame.Dispose(); $green.Dispose()
       - name: Publish self-contained application
-        run: dotnet publish .\src\GermanOSBackup\GermanOSBackup.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o .\publish
+        run: dotnet publish .\src\GermanOSBackup\GermanOSBackup.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:Version=${{ steps.version.outputs.version }} -o .\publish
       - name: Install Inno Setup
         run: choco install innosetup --yes --no-progress
       - name: Build installer
