@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.IO.Compression;
 using System.Security.Cryptography;
 
 namespace GermanOSBackup;
@@ -44,42 +45,21 @@ internal sealed class BackupEngine : IDisposable
         yield return ("Users", Path.Combine(drive, "Users")); yield return ("ProgramData", Path.Combine(drive, "ProgramData")); yield return ("XboxGames", Path.Combine(drive, "XboxGames"));
     }
 
-    public async Task StartAsync()
+    public Task StartAsync()
     {
-        if (Interlocked.Exchange(ref started, 1) != 0) return;
-        Directory.CreateDirectory(config.Destination);
-        RefreshWatchers();
-        _ = Task.Run(ProcessQueueAsync);
-        await RequestScanAsync();
+        // Backups are always user-triggered. Startup never scans or copies files.
+        Interlocked.Exchange(ref started, 1);
+        return Task.CompletedTask;
     }
 
     public void RefreshWatchers()
     {
-        if (Volatile.Read(ref disposed) != 0) return;
+        // Automatic file watching is intentionally disabled. Use "Проверить сейчас"
+        // to run a backup explicitly.
         lock (watchers)
         {
             foreach (var watcher in watchers) watcher.Dispose();
             watchers.Clear();
-            foreach (var (_, source, _) in ConfiguredSources())
-            {
-                if (!Directory.Exists(source)) continue;
-                try
-                {
-                    var watcher = new FileSystemWatcher(source)
-                    {
-                        IncludeSubdirectories = true,
-                        NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.LastWrite | NotifyFilters.Size,
-                        InternalBufferSize = 64 * 1024
-                    };
-                    watcher.Created += (_, e) => Queue(e.FullPath);
-                    watcher.Changed += (_, e) => Queue(e.FullPath);
-                    watcher.Renamed += (_, e) => Queue(e.FullPath);
-                    watcher.Error += (_, _) => _ = RequestScanAsync();
-                    watchers.Add(watcher);
-                    watcher.EnableRaisingEvents = true;
-                }
-                catch (Exception ex) { Log($"Наблюдение недоступно для {source}: {ex.Message}"); }
-            }
         }
     }
 
@@ -346,6 +326,34 @@ internal sealed class BackupEngine : IDisposable
             }
         }
         finally { if (temp is not null) { try { File.Delete(temp); } catch { } } slots.Release(); }
+    }
+
+    public async Task CreateZipAsync(string zipPath, CancellationToken cancellationToken = default)
+    {
+        var sourceRoot = Path.GetFullPath(config.Destination);
+        if (!Directory.Exists(sourceRoot)) throw new DirectoryNotFoundException("Папка резервной копии ещё не существует. Сначала запусти копирование.");
+        zipPath = Path.GetFullPath(zipPath);
+        if (zipPath.StartsWith(sourceRoot.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("ZIP-архив нельзя сохранять внутрь папки, которую архивируем. Выбери другое место.");
+        var level = PerformanceMode switch { "eco" => CompressionLevel.SmallestSize, "max" => CompressionLevel.Fastest, _ => CompressionLevel.Optimal };
+        await Task.Run(() =>
+        {
+            using var archive = ZipFile.Open(zipPath, ZipArchiveMode.Create);
+            var stack = new Stack<string>(); stack.Push(sourceRoot);
+            while (stack.Count > 0)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var current = stack.Pop();
+                foreach (var dir in Directory.EnumerateDirectories(current)) { cancellationToken.ThrowIfCancellationRequested(); if ((File.GetAttributes(dir) & FileAttributes.ReparsePoint) == 0) stack.Push(dir); }
+                foreach (var file in Directory.EnumerateFiles(current))
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if ((File.GetAttributes(file) & FileAttributes.ReparsePoint) != 0) continue;
+                    var relative = Path.GetRelativePath(sourceRoot, file).Replace(Path.DirectorySeparatorChar, '/');
+                    archive.CreateEntryFromFile(file, Path.GetFileName(sourceRoot) + "/" + relative, level);
+                }
+            }
+        }, cancellationToken).ConfigureAwait(false);
+        Log("ZIP-архив создан: " + zipPath);
     }
 
     private void UpdateSpeed()
