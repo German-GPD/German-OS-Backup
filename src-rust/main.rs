@@ -146,6 +146,7 @@ impl BackupApp {
         let cancel = self.cancel.clone();
         let stats = self.stats.clone();
         let sources = self.config.sources.clone();
+        let performance_mode = self.config.performance_mode.clone();
         let destination = dest;
         if let Ok(mut s) = stats.lock() {
             *s = Stats { running: true, status: "Подготовка к копированию…".into(), started: Some(SystemTime::now()), ..Default::default() };
@@ -184,6 +185,8 @@ impl BackupApp {
                         Ok(n) => {
                             total_bytes += n; window_bytes += n;
                             if let Ok(mut s) = stats.lock() { s.files_copied += 1; s.bytes_copied = total_bytes; }
+                            if performance_mode == "eco" { thread::sleep(Duration::from_millis(25)); }
+                            else if performance_mode == "balanced" { thread::sleep(Duration::from_millis(2)); }
                         },
                         Err(_) => if let Ok(mut s) = stats.lock() { s.errors += 1; },
                     }
@@ -291,7 +294,7 @@ impl BackupApp {
                 for entry in WalkDir::new(&source).follow_links(false).into_iter().filter_map(Result::ok) {
                     if !entry.file_type().is_file() { continue; }
                     let relative = entry.path().strip_prefix(&source)?;
-                    let name = format!("{}/{}", source.file_name().unwrap_or_default().to_string_lossy(), relative.to_string_lossy().replace('\\', "/"));
+                    let name = format!("{}/{}", source.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "Backup".to_string()), relative.to_string_lossy().replace('\\', "/"));
                     archive.start_file(name, options)?;
                     let mut input = fs::File::open(entry.path())?;
                     io::copy(&mut input, &mut archive)?;
