@@ -6,29 +6,34 @@
 
 ## Скачать
 
-- **[↓ German OS Backup Rust Edition](https://github.com/German-GPD/German-OS-Backup/releases/latest/download/GermanOSBackup-Rust-Setup-x64.exe)** — нативный интерфейс на Rust, без WebView2. EXE: `GermanOSBackup-Rust.exe`.
-- **[↓ German OS Backup C# Edition](https://github.com/German-GPD/German-OS-Backup/releases/latest/download/GermanOSBackup-CS-Setup-x64.exe)** — Windows Forms + WebView2. EXE: `GermanOSBackup-CS.exe`.
+Выбери одну из двух редакций:
 
-Обе ссылки ведут на установщики версии 1.3.0 и будут опубликованы вместе после успешной сборки обоих вариантов.
+[![Скачать Rust Edition](https://img.shields.io/badge/↓_Скачать-Rust_Edition-9bf0ad?style=for-the-badge&logo=rust&logoColor=102017)](https://github.com/German-GPD/German-OS-Backup/releases/latest/download/GermanOSBackup-Rust-Setup-x64.exe)  
+[![Скачать C# Edition](https://img.shields.io/badge/↓_Скачать-C%23_Edition-252d28?style=for-the-badge&logo=dotnet&logoColor=ffffff)](https://github.com/German-GPD/German-OS-Backup/releases/latest/download/GermanOSBackup-CS-Setup-x64.exe)
+
+- **Rust Edition** — нативный интерфейс без WebView2. Установщик: `GermanOSBackup-Rust-Setup-x64.exe`; приложение: `GermanOSBackup-Rust.exe`.
+- **C# Edition** — Windows Forms + WebView2, системный трей и проверка обновлений. Установщик: `GermanOSBackup-CS-Setup-x64.exe`; приложение: `GermanOSBackup-CS.exe`.
+
+Оба установщика публикуются одним релизом только после успешной сборки обеих редакций.
 
 Сайт: https://german-gpd.github.io/German-OS-Backup/
 
 ## Ветки
 
-- `main` — основная версия на Rust.
-- `rust` — отдельная ветка Rust Edition.
-- `cs` — отдельная ветка C# Edition.
+- `main` — сайт, README, общая документация и единая публикация релизов.
+- `rust` — исходный код Rust Edition.
+- `cs` — исходный код C# Edition.
 
 ## Возможности
 
 - Локальное резервное копирование выбранных папок на отдельный диск.
-- Повторное сканирование и копирование изменившихся файлов.
+- Ручное сканирование источников и копирование новых или изменившихся файлов.
 - Копии не удаляются автоматически при удалении оригиналов.
 - Выбор источников и папки назначения.
 - Счётчики скопированных и пропущенных файлов, ошибки и скорость.
 - Мониторинг загрузки CPU и памяти.
-- Проверка целостности по SHA-256 и восстановление отсутствующих файлов в Rust Edition.
-- C# Edition включает системный трей, журнал, проверку обновлений и встроенную панель WebView2.
+- Проверка целостности по SHA-256, восстановление отсутствующих файлов и создание ZIP-архива в Rust Edition.
+- C# Edition включает системный трей, журнал, режимы нагрузки, проверку обновлений и встроенную панель WebView2. Копирование запускается пользователем вручную.
 - Без рекламы, аккаунтов, аналитики и фоновой телеметрии.
 
 ## Сборка
