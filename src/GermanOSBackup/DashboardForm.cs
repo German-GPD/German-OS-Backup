@@ -13,7 +13,6 @@ internal sealed class DashboardForm : Form
     private readonly bool startHidden;
     private readonly WebView2 web = new() { Dock = DockStyle.Fill };
     private readonly System.Windows.Forms.Timer uiTimer = new() { Interval = 1000 };
-    private readonly System.Windows.Forms.Timer scanTimer = new() { Interval = 15 * 60 * 1000 };
     private readonly NotifyIcon tray;
     private bool allowClose;
     private bool started;
@@ -114,13 +113,11 @@ internal sealed class DashboardForm : Form
             if (!started)
             {
                 started = true;
-                await StartBackupAsync();
+                await engine.StartAsync();
             }
         };
         uiTimer.Tick += (_, _) => RefreshStats();
         uiTimer.Start();
-        scanTimer.Tick += async (_, _) => await engine.RequestScanAsync();
-        scanTimer.Start();
         FormClosing += (_, e) =>
         {
             if (!allowClose && e.CloseReason == CloseReason.UserClosing)
@@ -170,8 +167,24 @@ internal sealed class DashboardForm : Form
                 RefreshStats();
                 break;
             case "scan":
-                details("Проверка поставлена в очередь. Это может занять время.");
+                details("Резервное копирование запущено вручную. Автоматического повтора не будет.");
                 await engine.RequestScanAsync();
+                break;
+            case "zip":
+                using (var dialog = new SaveFileDialog { Title = "Сохранить резервную копию в ZIP", Filter = "ZIP-архив (*.zip)|*.zip", FileName = "GermanOSBackup-" + DateTime.Now.ToString("yyyyMMdd-HHmm") + ".zip", AddExtension = true, DefaultExt = "zip" })
+                {
+                    if (dialog.ShowDialog(this) == DialogResult.OK)
+                    {
+                        try
+                        {
+                            details("Создаём ZIP-архив. Это может занять время…");
+                            await engine.CreateZipAsync(dialog.FileName);
+                            details("ZIP-архив успешно создан.");
+                            MessageBox.Show(this, "Архив создан:\n" + dialog.FileName, "ZIP-архив", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        }
+                        catch (Exception ex) { MessageBox.Show(this, ex.Message, "Не удалось создать ZIP", MessageBoxButtons.OK, MessageBoxIcon.Error); }
+                    }
+                }
                 break;
             case "stop":
                 engine.StopCurrentScan();
@@ -354,8 +367,7 @@ internal sealed class DashboardForm : Form
         if (form.ShowDialog(this) == DialogResult.OK)
         {
             engine.RefreshWatchers();
-            await engine.RequestScanAsync();
-            details("Источники сохранены. Проверяем выбранные папки.");
+            details("Источники сохранены. Нажми «Создать / обновить копию», когда будешь готов.");
             RefreshStats();
         }
     }
@@ -447,7 +459,6 @@ internal sealed class DashboardForm : Form
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
         uiTimer.Stop(); uiTimer.Dispose();
-        scanTimer.Stop(); scanTimer.Dispose();
         tray.Visible = false; tray.Dispose(); engine.Dispose();
         base.OnFormClosed(e);
     }
@@ -470,7 +481,7 @@ button:disabled{opacity:.42;cursor:not-allowed;filter:saturate(.4)}.notice{box-s
 @media(max-width:700px){.side{position:static;height:auto;display:flex;flex-direction:row;align-items:center;overflow-x:auto;padding:10px;border-right:0;border-bottom:1px solid var(--line)}.brand{white-space:nowrap}.nav{display:flex;gap:4px}.nav button{white-space:nowrap}.side-note{display:none}.main{padding:16px 12px}.top h1{font-size:22px}.hero h2{font-size:20px}.status-pill{white-space:normal}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.section-grid{grid-template-columns:minmax(0,1fr)}.actions{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style></head><body><div class="shell">
 <aside class="side"><div class="brand"><div class="mark">G_</div><span>German OS Backup C# Edition</span></div><nav class="nav"><button class="active" onclick="tab('overview')">▦　 Обзор</button><button onclick="act('sources')">▣　 Источники</button><button onclick="act('restore')">↶　 Восстановление</button><button onclick="act('verify')">✓　 Проверка целостности</button><button onclick="act('log')">≡　 Журнал событий</button></nav><div class="side-note"><b>Подсказка</b><p>Копия должна находиться на отдельном физическом диске, если нужно защититься от поломки накопителя.</p><button onclick="act('help')" style="width:100%">Все подсказки</button></div></aside>
-<main class="main"><header class="top"><div><div class="eyebrow">ЛОКАЛЬНАЯ ЗАЩИТА ФАЙЛОВ</div><h1>Обзор резервного копирования</h1></div><div class="top-actions"><button onclick="act('help')">? Помощь</button><button onclick="act('checkUpdates')">↻ Проверить обновления</button><button onclick="act('scan')">Проверить сейчас</button><button class="primary" onclick="act('sources')">Настроить папки</button></div></header>
+<main class="main"><header class="top"><div><div class="eyebrow">ЛОКАЛЬНАЯ ЗАЩИТА ФАЙЛОВ</div><h1>Обзор резервного копирования</h1></div><div class="top-actions"><button onclick="act('help')">? Помощь</button><button onclick="act('checkUpdates')">↻ Проверить обновления</button><button onclick="act('zip')">Создать ZIP</button><button onclick="act('scan')">Создать / обновить копию</button><button class="primary" onclick="act('sources')">Выбрать папки</button></div></header>
 <div class="notice" id="notice"></div>
 <section class="hero"><div><div class="label">СОСТОЯНИЕ РЕЗЕРВНОЙ КОПИИ</div><h2 id="headline">Подключаемся…</h2><p id="detail">Состояние обновляется автоматически. Здесь видно, выполняется ли копирование и когда завершалась последняя проверка.</p></div><div class="status-pill" id="pill"><span class="dot"></span><span id="pillText">ЗАПУСК</span></div></section>
 <section class="card" style="margin-bottom:16px"><div class="section-title"><h3>Режим нагрузки</h3><span id="modeDescription">Баланс между скоростью и отзывчивостью ПК</span></div><div class="actions" style="grid-template-columns:repeat(3,minmax(0,1fr))"><button id="modeEco" onclick="setMode('eco')">Экономия ресурсов</button><button id="modeBalanced" onclick="setMode('balanced')">Баланс</button><button id="modeMax" onclick="setMode('max')">Максимальная скорость</button></div><p class="hint" style="margin:10px 0 0">Режим влияет на параллельность копирования и приоритет приложения. Изменение применяется сразу и сохраняется после перезапуска.</p></section>
