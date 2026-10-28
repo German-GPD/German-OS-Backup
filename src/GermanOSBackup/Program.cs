@@ -19,21 +19,49 @@ internal static class Program
         try
         {
             var config = LoadConfig();
-            if (config is null || string.IsNullOrWhiteSpace(config.Destination))
+            var isFirstRun = config is null || string.IsNullOrWhiteSpace(config.Destination);
+            if (isFirstRun)
             {
                 using var setup = new FirstRunForm();
                 if (setup.ShowDialog() != DialogResult.OK || string.IsNullOrWhiteSpace(setup.Destination)) return;
-                config = new AppConfig { Destination = Path.GetFullPath(setup.Destination), FirstRunComplete = true };
+                config = new AppConfig
+                {
+                    Destination = Path.GetFullPath(setup.Destination),
+                    FirstRunComplete = true,
+                    SelectedSources = BackupEngine.Sources().Where(x => Directory.Exists(x.Path)).Select(x => x.Path).ToList()
+                };
+                SaveConfig(config);
+
+                var choice = MessageBox.Show(
+                    "Теперь выбери папки, которые нужно сохранять. Можно оставить предложенные варианты и изменить их позже.",
+                    "Шаг 2 из 2 · Источники копирования",
+                    MessageBoxButtons.OKCancel,
+                    MessageBoxIcon.Information);
+                if (choice == DialogResult.OK)
+                {
+                    using var sources = new SourcesForm(config);
+                    if (sources.ShowDialog() != DialogResult.OK)
+                    {
+                        config.SelectedSources = BackupEngine.Sources().Where(x => Directory.Exists(x.Path)).Select(x => x.Path).ToList();
+                        SaveConfig(config);
+                    }
+                }
+            }
+
+            ValidateDestination(config!.Destination);
+            if (config.SelectedSources is not { Count: > 0 })
+            {
+                config.SelectedSources = BackupEngine.Sources().Where(x => Directory.Exists(x.Path)).Select(x => x.Path).ToList();
                 SaveConfig(config);
             }
-            ValidateDestination(config.Destination);
+
             var background = args.Contains("--background", StringComparer.OrdinalIgnoreCase);
             try { Process.GetCurrentProcess().PriorityClass = background ? ProcessPriorityClass.BelowNormal : (args.Contains("--first-run", StringComparer.OrdinalIgnoreCase) ? ProcessPriorityClass.AboveNormal : ProcessPriorityClass.Normal); } catch { }
             Application.Run(new DashboardForm(config, background));
         }
         catch (Exception ex)
         {
-            File.AppendAllText(LogPath, $"[{DateTime.Now:O}] FATAL {ex}{Environment.NewLine}");
+            try { File.AppendAllText(LogPath, $"[{DateTime.Now:O}] FATAL {ex}{Environment.NewLine}"); } catch { }
             MessageBox.Show($"German OS Backup не смог запуститься. Подробности: {LogPath}", "German OS Backup", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
