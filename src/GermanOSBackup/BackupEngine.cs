@@ -73,7 +73,10 @@ internal sealed class BackupEngine : IDisposable
     {
         // Directory enumeration can block on slow, sleeping or unhealthy drives.
         // Keep every filesystem walk off the WinForms UI thread.
-        if (Volatile.Read(ref disposed) != 0 || !await scanLock.WaitAsync(0).ConfigureAwait(false)) return;
+        if (Volatile.Read(ref disposed) != 0) return;
+        try { await scanLock.WaitAsync(stop.Token).ConfigureAwait(false); }
+        catch (OperationCanceledException) { return; }
+        if (Volatile.Read(ref disposed) != 0) { scanLock.Release(); return; }
 
         await Task.Run(async () =>
         {
