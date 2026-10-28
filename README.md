@@ -1,41 +1,50 @@
 # German OS Backup
 
-> **Windows x64 · Rust Edition и C# Edition** · [Релизы и установщики](https://github.com/German-GPD/German-OS-Backup/releases)
+> **Windows 10/11 · x64 · Rust Edition + C# Edition**  
+> [Сайт проекта](https://german-gpd.github.io/German-OS-Backup/) · [Релизы](https://github.com/German-GPD/German-OS-Backup/releases) · [Сообщить об ошибке](https://github.com/German-GPD/German-OS-Backup/issues)
 
-Локальное резервное копирование без рекламы, аккаунтов и телеметрии. Выбери редакцию — у каждой собственный установщик, EXE и подпись в интерфейсе.
+Локальная файловая резервная копия без рекламы, аккаунтов и телеметрии. Выбирай редакцию по интерфейсу и набору функций.
 
 ## Скачать
 
-- **[↓ German OS Backup Rust Edition](https://github.com/German-GPD/German-OS-Backup/releases/latest/download/GermanOSBackup-Rust-Setup-x64.exe)** — нативный интерфейс на Rust, без WebView2. EXE: `GermanOSBackup-Rust.exe`.
-- **[↓ German OS Backup C# Edition](https://github.com/German-GPD/German-OS-Backup/releases/latest/download/GermanOSBackup-CS-Setup-x64.exe)** — Windows Forms + WebView2. EXE: `GermanOSBackup-CS.exe`.
+| Редакция | Что внутри | Установщик |
+|---|---|---|
+| **Rust Edition** | Нативный интерфейс, SHA-256, восстановление отсутствующих файлов, ZIP-архив | [**↓ Скачать Rust Edition**](https://github.com/German-GPD/German-OS-Backup/releases/latest/download/GermanOSBackup-Rust-Setup-x64.exe) |
+| **C# Edition** | Windows Forms + WebView2, системный трей, журнал, режимы нагрузки, проверка обновлений | [**↓ Скачать C# Edition**](https://github.com/German-GPD/German-OS-Backup/releases/latest/download/GermanOSBackup-CS-Setup-x64.exe) |
 
-Обе ссылки ведут на установщики версии 1.3.0 и будут опубликованы вместе после успешной сборки обоих вариантов.
+Оба установщика публикуются **одним релизом**, только если сборка обеих редакций завершилась успешно. Имена приложений не пересекаются: `GermanOSBackup-Rust.exe` и `GermanOSBackup-CS.exe`.
 
-Сайт: https://german-gpd.github.io/German-OS-Backup/
+## Структура веток
 
-## Ветки
-
-- `main` — основная версия на Rust.
-- `rust` — отдельная ветка Rust Edition.
-- `cs` — отдельная ветка C# Edition.
+- `main` — сайт, общая документация, версия и атомарная сборка релиза.
+- `rust` — исходники и отдельная сборка Rust Edition.
+- `cs` — исходники и отдельная сборка C# Edition.
 
 ## Возможности
 
-- Локальное резервное копирование выбранных папок на отдельный диск.
-- Повторное сканирование и копирование изменившихся файлов.
-- Копии не удаляются автоматически при удалении оригиналов.
-- Выбор источников и папки назначения.
-- Счётчики скопированных и пропущенных файлов, ошибки и скорость.
-- Мониторинг загрузки CPU и памяти.
-- Проверка целостности по SHA-256 и восстановление отсутствующих файлов в Rust Edition.
-- C# Edition включает системный трей, журнал, проверку обновлений и встроенную панель WebView2.
-- Без рекламы, аккаунтов, аналитики и фоновой телеметрии.
+- Выбор папок-источников и отдельного каталога назначения.
+- Ручной запуск и остановка копирования; новые и изменённые файлы копируются повторно.
+- Сохранение копии, даже если исходный файл удалён позднее.
+- Счётчики файлов, скорость, ошибки и мониторинг системных ресурсов.
+- Проверка целостности файлов по SHA-256.
+- Восстановление отсутствующих файлов без перезаписи существующих.
+- Создание ZIP-архива (в Rust Edition и C# Edition).
+- Настройки и журнал хранятся локально; сетевой запрос выполняется только при ручной проверке обновлений C# Edition.
 
-## Сборка
+## Установка и использование
+
+1. Скачай установщик выбранной редакции.
+2. Запусти его и открой **German OS Backup {Edition}**.
+3. Выбери папки, которые нужно сохранить.
+4. Укажи папку назначения на другом диске.
+5. Проверь настройки и вручную запусти копирование.
+6. Периодически запускай проверку целостности и проверяй, что важные файлы открываются.
+
+## Сборка из исходников
 
 ### Rust Edition
 
-Требуется стабильный Rust toolchain и Windows SDK для цели `x86_64-pc-windows-msvc`.
+Нужны стабильный Rust toolchain и компоненты Windows для цели MSVC.
 
 ```powershell
 cargo build --release --target x86_64-pc-windows-msvc
@@ -43,17 +52,19 @@ cargo build --release --target x86_64-pc-windows-msvc
 
 ### C# Edition
 
-Требуются .NET 10 SDK и Inno Setup 6.
+Нужны .NET 10 SDK и Inno Setup 6.
 
 ```powershell
 dotnet publish .\src\GermanOSBackup\GermanOSBackup.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o .\publish
 iscc .\installer\GermanOSBackup-CS.iss
 ```
 
-## Безопасность и ограничения
+## Важные ограничения
 
-Это файловая резервная копия, а не образ Windows и не средство полного восстановления системы. Доступ к защищённым и занятым файлам зависит от разрешений Windows. Для важных данных держи дополнительную копию на отдельном физическом носителе.
+Это **файловая резервная копия**, а не образ Windows: программа не сохраняет загрузчик и не обещает восстановление операционной системы целиком. Файлы, заблокированные другим приложением или недоступные текущему пользователю, могут не скопироваться — смотри журнал ошибок. Восстановление пропускает существующие файлы и не заменяет их автоматически.
+
+Для важных данных храни ещё одну копию на отдельном физическом носителе. Наличие установщика не означает, что Windows подписывает программу доверенным сертификатом; при первом запуске SmartScreen может показать предупреждение.
 
 ## Лицензия
 
-MIT. [Сообщить об ошибке](https://github.com/German-GPD/German-OS-Backup/issues).
+MIT. Смотри [LICENSE](LICENSE).
