@@ -229,7 +229,8 @@ internal sealed class DashboardForm : Form
                 MessageBox.Show(this, "GitHub не вернул корректный номер версии.", "Проверка обновлений", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
-            var currentVersion = typeof(Program).Assembly.GetName().Version ?? new Version(1, 2, 0);
+            var rawCurrentVersion = typeof(Program).Assembly.GetName().Version ?? new Version(1, 2, 0);
+            var currentVersion = new Version(rawCurrentVersion.Major, Math.Max(0, rawCurrentVersion.Minor), Math.Max(0, rawCurrentVersion.Build));
             if (latestVersion <= currentVersion)
             {
                 details("Установлена последняя версия " + currentVersion.ToString(3) + ".");
