@@ -71,8 +71,9 @@ internal sealed class DashboardForm : Form
             using var form = new SourcesForm(config);
             if (form.ShowDialog(this) == DialogResult.OK)
             {
+                engine.RefreshWatchers();
+                details.Text = "Источники обновлены. Проверяем выбранные папки…";
                 await engine.RequestScanAsync();
-                details.Text = "Выбор папок сохранён. Новые источники начнут отслеживаться после перезапуска приложения.";
             }
         };
         var open = Palette.Button("Открыть папку", false); open.SetBounds(700, 601, 170, 40); open.Anchor = AnchorStyles.Top | AnchorStyles.Right; Controls.Add(open); open.Click += (_, _) => OpenDestination();
