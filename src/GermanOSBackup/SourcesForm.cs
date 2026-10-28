@@ -19,7 +19,42 @@ internal sealed class SourcesForm : Form
         bottom.Controls.Add(save); bottom.Controls.Add(cancel); bottom.Controls.Add(add); layout.Controls.Add(title, 0, 0); layout.Controls.Add(host, 0, 1); layout.Controls.Add(bottom, 0, 2); Controls.Add(layout);
         BuildTree(); tree.BeforeExpand += (_, e) => LoadChildren(e.Node!); tree.AfterCheck += (_, e) => { if (!loading) SetChildren(e.Node!, e.Node!.Checked); };
         add.Click += (_, _) => { using var d = new FolderBrowserDialog { Description = "Выбери папку для резервного копирования", ShowNewFolderButton = false }; if (d.ShowDialog(this) == DialogResult.OK && Directory.Exists(d.SelectedPath)) AddPath(d.SelectedPath, true); };
-        save.Click += (_, _) => { config.SelectedSources = GetSelectedRoots().Distinct(StringComparer.OrdinalIgnoreCase).ToList(); Program.SaveConfig(config); DialogResult = DialogResult.OK; Close(); };
+        save.Click += (_, _) =>
+        {
+            var selected = GetSelectedRoots().Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            if (selected.Count == 0)
+            {
+                MessageBox.Show(this, "Выбери хотя бы одну папку для резервного копирования.", "German OS Backup", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            try
+            {
+                var destination = Path.GetFullPath(config.Destination).TrimEnd(Path.DirectorySeparatorChar);
+                foreach (var source in selected)
+                {
+                    var sourceFull = Path.GetFullPath(source).TrimEnd(Path.DirectorySeparatorChar);
+                    if (string.Equals(destination, sourceFull, StringComparison.OrdinalIgnoreCase) ||
+                        destination.StartsWith(sourceFull + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
+                        sourceFull.StartsWith(destination + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                    {
+                        MessageBox.Show(this,
+                            $"Папка копии не должна совпадать с выбранным источником, находиться внутри него или быть его родительской папкой.\\n\\nИсточник: {sourceFull}\\nПапка копии: {destination}",
+                            "Небезопасный путь", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
+                }
+
+                config.SelectedSources = selected;
+                Program.SaveConfig(config);
+                DialogResult = DialogResult.OK;
+                Close();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"Не удалось сохранить выбор папок: {ex.Message}", "German OS Backup", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        };
         cancel.Click += (_, _) => { DialogResult = DialogResult.Cancel; Close(); };
     }
 
