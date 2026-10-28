@@ -36,6 +36,7 @@ internal static class Program
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(installedExe)!);
                 File.Copy(currentExe, installedExe, overwrite: true);
+                mutex.ReleaseMutex();
                 Process.Start(new ProcessStartInfo(installedExe) { UseShellExecute = true });
                 return;
             }
