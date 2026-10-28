@@ -80,7 +80,7 @@ internal static class Program
         {
             using var key = Registry.CurrentUser.CreateSubKey(RunKeyPath, writable: true);
             key?.SetValue(RunValueName, $"\\"{exePath}\\"");
-        }
+}
         catch { }
     }
 }
