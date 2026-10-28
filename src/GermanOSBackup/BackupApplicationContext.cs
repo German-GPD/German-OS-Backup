@@ -32,12 +32,11 @@ internal sealed class BackupApplicationContext : ApplicationContext
     {
         try
         {
-            using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", enabled);
+            using var key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run");
             if (enabled)
             {
-                using var writable = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run");
                 var exe = Environment.ProcessPath;
-                if (!string.IsNullOrWhiteSpace(exe)) writable?.SetValue("GermanOSBackup", $"\\"{exe}\\"");
+                if (!string.IsNullOrWhiteSpace(exe)) key?.SetValue("GermanOSBackup", $"\\"{exe}\\"");
             }
             else key?.DeleteValue("GermanOSBackup", false);
         }
