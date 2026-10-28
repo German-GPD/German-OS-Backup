@@ -87,14 +87,14 @@ impl BackupApp {
 
         // Keep the same per-user config location as the previous C# version.
         let local_app_data = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| ".".into());
-        let config_path = PathBuf::from(local_app_data).join("GermanOSBackup").join("config.json");
+        let config_path = PathBuf::from(local_app_data).join("GermanOSBackup-Rust").join("config.json");
         let config = fs::read_to_string(&config_path)
             .ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
         let stats = Arc::new(Mutex::new(Stats { status: "Готово к работе".into(), ..Default::default() }));
         Self { config, config_path, stats, cancel: Arc::new(AtomicBool::new(false)),
             system: System::new(), cpu: 0.0, memory: 0.0, memory_used: 0, memory_total: 0,
             last_stats: Stats::default(), last_tick: std::time::Instant::now(), log: vec![
-                format!("German OS Backup {VERSION} запущен"),
+                format!("German OS Backup Rust Edition {VERSION} запущен"),
                 "Данные хранятся локально; телеметрии нет".into()
             ] }
     }
@@ -297,7 +297,7 @@ impl eframe::App for BackupApp {
             ui.horizontal(|ui| {
                 ui.label(RichText::new("G_").size(25.0).strong().color(green));
                 ui.vertical(|ui| {
-                    ui.label(RichText::new("GERMAN OS BACKUP").size(17.0).strong().color(Color32::WHITE));
+                    ui.label(RichText::new("GERMAN OS BACKUP · RUST EDITION").size(17.0).strong().color(Color32::WHITE));
                     ui.label(RichText::new(format!("ЛОКАЛЬНОЕ РЕЗЕРВНОЕ КОПИРОВАНИЕ · v{VERSION}")).size(10.0).color(muted));
                 });
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -378,7 +378,7 @@ impl eframe::App for BackupApp {
                 ui.label(RichText::new(&self.last_stats.status).color(if self.last_stats.errors > 0 { Color32::from_rgb(255,130,110) } else { green }).size(11.0));
             });
             ui.add_space(5.0);
-            ui.label(RichText::new(format!("German OS Backup v{VERSION} · Windows · локальная работа · без телеметрии")).color(muted).size(10.0));
+            ui.label(RichText::new(format!("German OS Backup Rust Edition v{VERSION} · Windows · локальная работа · без телеметрии")).color(muted).size(10.0));
         });
     }
 }
@@ -410,5 +410,5 @@ fn main() -> eframe::Result {
         viewport: egui::ViewportBuilder::default().with_inner_size([1180.0, 840.0]).with_min_inner_size([880.0, 700.0]),
         ..Default::default()
     };
-    eframe::run_native("German OS Backup", options, Box::new(|cc| Ok(Box::new(BackupApp::new(cc)))))
+    eframe::run_native("German OS Backup Rust Edition", options, Box::new(|cc| Ok(Box::new(BackupApp::new(cc)))))
 }
