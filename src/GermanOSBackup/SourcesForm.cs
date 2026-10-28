@@ -15,11 +15,12 @@ internal sealed class SourcesForm : Form
         var header = new Panel { Dock = DockStyle.Fill, BackColor = Palette.Background };
         var title = Palette.Label("Выбери папки для копирования", 19, Palette.Text, true); title.SetBounds(0, 0, 650, 31); header.Controls.Add(title);
         var subtitle = Palette.Label("Отметь папки галочками. Можно выбрать весь раздел или добавить любую папку вручную.", 10, Palette.Muted); subtitle.SetBounds(1, 35, 650, 26); header.Controls.Add(subtitle);
-        var host = new Panel { Dock = DockStyle.Fill, BackColor = Palette.Panel, Padding = new Padding(10) }; tree.BackColor = Palette.Panel; tree.ForeColor = Palette.Text; tree.ShowNodeToolTips = true; tree.ToolTipText = "Отметь папки, содержимое которых нужно сохранять."; host.Controls.Add(tree);
+        var host = new Panel { Dock = DockStyle.Fill, BackColor = Palette.Panel, Padding = new Padding(10) }; tree.BackColor = Palette.Panel; tree.ForeColor = Palette.Text; tree.ShowNodeToolTips = true; host.Controls.Add(tree);
         var tips = new ToolTip { AutoPopDelay = 10000, InitialDelay = 350, ReshowDelay = 150, ShowAlways = true };
         var bottom = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, WrapContents = false };
         var save = Palette.Button("Сохранить выбор", true); save.Width = 150; var cancel = Palette.Button("Отмена", false); cancel.Width = 100; var add = Palette.Button("Добавить папку…", false); add.Width = 145;
         bottom.Controls.Add(save); bottom.Controls.Add(cancel); bottom.Controls.Add(add); layout.Controls.Add(header, 0, 0); layout.Controls.Add(host, 0, 1); layout.Controls.Add(bottom, 0, 2); Controls.Add(layout);
+        tips.SetToolTip(tree, "Отметь папки, содержимое которых нужно сохранять.");
         tips.SetToolTip(add, "Добавить папку, которой нет в списке стандартных источников.");
         tips.SetToolTip(save, "Сохранить выбранные папки и вернуться в главное окно.");
         tips.SetToolTip(cancel, "Отменить изменения и оставить прежний выбор.");
