@@ -34,19 +34,39 @@ internal sealed class BackupEngine : IDisposable
     {
         if (Interlocked.Exchange(ref started, 1) != 0) return;
         Directory.CreateDirectory(config.Destination);
-        foreach (var (_, source, _) in ConfiguredSources())
-        {
-            if (!Directory.Exists(source)) continue;
-            try
-            {
-                var watcher = new FileSystemWatcher(source) { IncludeSubdirectories = true, NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.LastWrite | NotifyFilters.Size, InternalBufferSize = 64 * 1024 };
-                watcher.Created += (_, e) => Queue(e.FullPath); watcher.Changed += (_, e) => Queue(e.FullPath); watcher.Renamed += (_, e) => Queue(e.FullPath);
-                watcher.Error += (_, _) => _ = RequestScanAsync(); watcher.EnableRaisingEvents = true; watchers.Add(watcher);
-            }
-            catch (Exception ex) { Log($"Наблюдение недоступно для {source}: {ex.Message}"); }
-        }
+        RefreshWatchers();
         _ = Task.Run(ProcessQueueAsync);
         await RequestScanAsync();
+    }
+
+    public void RefreshWatchers()
+    {
+        if (Volatile.Read(ref disposed) != 0) return;
+        lock (watchers)
+        {
+            foreach (var watcher in watchers) watcher.Dispose();
+            watchers.Clear();
+            foreach (var (_, source, _) in ConfiguredSources())
+            {
+                if (!Directory.Exists(source)) continue;
+                try
+                {
+                    var watcher = new FileSystemWatcher(source)
+                    {
+                        IncludeSubdirectories = true,
+                        NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.LastWrite | NotifyFilters.Size,
+                        InternalBufferSize = 64 * 1024
+                    };
+                    watcher.Created += (_, e) => Queue(e.FullPath);
+                    watcher.Changed += (_, e) => Queue(e.FullPath);
+                    watcher.Renamed += (_, e) => Queue(e.FullPath);
+                    watcher.Error += (_, _) => _ = RequestScanAsync();
+                    watchers.Add(watcher);
+                    watcher.EnableRaisingEvents = true;
+                }
+                catch (Exception ex) { Log($"Наблюдение недоступно для {source}: {ex.Message}"); }
+            }
+        }
     }
 
     public async Task RequestScanAsync()
@@ -238,7 +258,8 @@ internal sealed class BackupEngine : IDisposable
     public void Dispose()
     {
         if (Interlocked.Exchange(ref disposed, 1) != 0) return;
-        stop.Cancel(); foreach (var watcher in watchers) watcher.Dispose();
+        stop.Cancel();
+        lock (watchers) { foreach (var watcher in watchers) watcher.Dispose(); watchers.Clear(); }
         // Do not dispose semaphores here: an in-flight copy may still be unwinding after cancellation.
     }
 }
