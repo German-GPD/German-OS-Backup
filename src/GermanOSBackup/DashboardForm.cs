@@ -141,6 +141,27 @@ internal sealed class DashboardForm : Form
             case "verify":
                 await VerifyAsync();
                 break;
+            case "performanceMode":
+                var mode = root.TryGetProperty("mode", out var modeValue) ? modeValue.GetString() : "balanced";
+                engine.SetPerformanceMode(mode ?? "balanced");
+                try
+                {
+                    Process.GetCurrentProcess().PriorityClass = engine.PerformanceMode switch
+                    {
+                        "eco" => ProcessPriorityClass.Idle,
+                        "max" => ProcessPriorityClass.Normal,
+                        _ => ProcessPriorityClass.BelowNormal
+                    };
+                }
+                catch { }
+                details(engine.PerformanceMode switch
+                {
+                    "eco" => "Режим экономии: одна операция копирования, низкий приоритет и ограниченная скорость записи.",
+                    "max" => "Максимальная скорость включена. Нагрузка на диск и процессор может вырасти.",
+                    _ => "Баланс включён: умеренная параллельность и сниженный приоритет процесса."
+                });
+                RefreshStats();
+                break;
             case "scan":
                 details("Проверка поставлена в очередь. Это может занять время.");
                 await engine.RequestScanAsync();
@@ -189,7 +210,7 @@ internal sealed class DashboardForm : Form
         try
         {
             await engine.StartAsync();
-            try { Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.BelowNormal; } catch { }
+            try { Process.GetCurrentProcess().PriorityClass = engine.PerformanceMode switch { "eco" => ProcessPriorityClass.Idle, "max" => ProcessPriorityClass.Normal, _ => ProcessPriorityClass.BelowNormal }; } catch { }
         }
         catch (Exception ex)
         {
@@ -252,7 +273,8 @@ internal sealed class DashboardForm : Form
             speed = Interlocked.Read(ref s.BytesPerSecond),
             scanning,
             destination = config.Destination,
-            sourceCount = config.SelectedSources?.Count ?? 0
+            sourceCount = config.SelectedSources?.Count ?? 0,
+            performanceMode = engine.PerformanceMode
         });
         _ = web.CoreWebView2.ExecuteScriptAsync($"window.updateStats({payload});");
     }
@@ -305,6 +327,7 @@ internal sealed class DashboardForm : Form
 <main class="main"><header class="top"><div><div class="eyebrow">ЛОКАЛЬНАЯ ЗАЩИТА ФАЙЛОВ</div><h1>Обзор резервного копирования</h1></div><div class="top-actions"><button onclick="act('help')">? Помощь</button><button onclick="act('scan')">↻ Проверить сейчас</button><button class="primary" onclick="act('sources')">Настроить папки</button></div></header>
 <div class="notice" id="notice"></div>
 <section class="hero"><div><div class="label">СОСТОЯНИЕ РЕЗЕРВНОЙ КОПИИ</div><h2 id="headline">Подключаемся…</h2><p id="detail">Состояние обновляется автоматически. Здесь видно, выполняется ли копирование и когда завершалась последняя проверка.</p></div><div class="status-pill" id="pill"><span class="dot"></span><span id="pillText">ЗАПУСК</span></div></section>
+<section class="card" style="margin-bottom:16px"><div class="section-title"><h3>Режим нагрузки</h3><span id="modeDescription">Баланс между скоростью и отзывчивостью ПК</span></div><div class="actions" style="grid-template-columns:repeat(3,minmax(0,1fr))"><button id="modeEco" onclick="setMode('eco')">Экономия ресурсов</button><button id="modeBalanced" onclick="setMode('balanced')">Баланс</button><button id="modeMax" onclick="setMode('max')">Максимальная скорость</button></div><p class="hint" style="margin:10px 0 0">Режим влияет на параллельность копирования и приоритет приложения. Изменение применяется сразу и сохраняется после перезапуска.</p></section>
 <section class="grid"><article class="card"><div class="card-label">Скопировано <span class="tip" data-tip="Общий объём данных, записанных резервным копированием с момента запуска приложения.">i</span></div><div class="value" id="bytes">0 Б</div><div class="hint">Объём записанных файлов</div></article><article class="card"><div class="card-label">Файлы сохранены <span class="tip" data-tip="Количество файлов, которые программа успешно скопировала.">i</span></div><div class="value" id="files">0</div><div class="hint">За время работы приложения</div></article><article class="card error-card"><div class="card-label">Ошибки <span class="tip" data-tip="Файлы или папки, которые не удалось обработать. Открой журнал, чтобы узнать причину.">i</span></div><div class="value" id="errors">0</div><div class="hint" id="errorHint">Нет зарегистрированных ошибок</div></article><article class="card"><div class="card-label">Текущая скорость <span class="tip" data-tip="При отсутствии изменений скорость равна нулю — это нормально.">i</span></div><div class="value" id="speed">0 Б/с</div><div class="hint" id="scanHint">Ожидание</div></article></section>
 <section class="section-grid"><article class="card"><div class="section-title"><h3>Активность копирования</h3><span id="chartLabel">Последние обновления</span></div><div class="chart-wrap"><canvas id="chart"></canvas><div class="empty-chart" id="chartEmpty">График скорости появится во время копирования</div></div><div class="chart-legend"><span>Ранние замеры</span><span>Сейчас</span></div></article>
 <article class="card"><div class="section-title"><h3>Что защищено</h3><span class="tip" data-tip="Список источников можно изменить в любой момент.">i</span></div><div class="path"><div class="drive-icon">D:</div><div class="path-text"><b>Папка резервной копии</b><span id="destination">Загрузка пути…</span></div></div><div class="source-row"><span>Выбрано источников</span><b id="sourceCount">—</b></div><div class="actions"><button onclick="act('chooseDestination')">Изменить место</button><button onclick="act('openDestination')">Открыть папку</button><button onclick="act('sources')">Выбрать папки</button><button onclick="act('restore')">Восстановить</button></div></article></section>
@@ -313,9 +336,10 @@ internal sealed class DashboardForm : Form
 <footer class="footer"><span>German OS Backup · Локально, без аккаунта и телеметрии</span><span>Данные на этом экране обновляются автоматически</span></footer></main></div>
 <script>
 const samples=[];function act(action){window.chrome.webview.postMessage({action})}function tab(name){document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('active'));event.currentTarget.classList.add('active');if(name==='overview')return}
+function setMode(mode){window.chrome.webview.postMessage({action:"performanceMode",mode})}
 function fmtBytes(n){if(!n||n<0)return'0 Б';const u=['Б','КБ','МБ','ГБ','ТБ'];let i=0,v=n;while(v>=1024&&i<u.length-1){v/=1024;i++}return v.toLocaleString('ru-RU',{maximumFractionDigits:1})+' '+u[i]}
 function fmtSpeed(n){return fmtBytes(n)+'/с'}function fmtNum(n){return Number(n||0).toLocaleString('ru-RU')}
-function updateStats(s){document.getElementById('headline').textContent=s.headline;document.getElementById('bytes').textContent=fmtBytes(s.bytes);document.getElementById('files').textContent=fmtNum(s.files);document.getElementById('errors').textContent=fmtNum(s.errors);document.getElementById('speed').textContent=fmtSpeed(s.speed);document.getElementById('lastScan').textContent=s.lastScan;document.getElementById('destination').textContent=s.destination;document.querySelector('.drive-icon').textContent=(s.destination.match(/^[A-Za-z]:/)||['DISK'])[0];document.getElementById('sourceCount').textContent=fmtNum(s.sourceCount);document.getElementById('healthErrors').textContent=fmtNum(s.errors);document.getElementById('errorHint').textContent=s.errors?'Открой журнал и проверь причины':'Нет зарегистрированных ошибок';document.getElementById('scanHint').textContent=s.scanning?'Идёт сканирование':'Сейчас не копирует данные';document.getElementById('watchStatus').textContent='События + каждые 15 мин';document.getElementById('progressText').textContent=s.scanning?'Обработано файлов: '+fmtNum(s.seen):'Фоновое отслеживание изменений включено';document.getElementById('progress').classList.toggle('running',!!s.scanning);document.getElementById('progress').style.width=s.scanning?'35%':'0%';const pill=document.getElementById('pill');pill.className='status-pill '+(s.status==='attention'?'attention':s.status==='copying'?'copying':'');document.getElementById('pillText').textContent=s.status==='attention'?'ТРЕБУЕТСЯ ВНИМАНИЕ':s.status==='copying'?'КОПИРОВАНИЕ':s.status==='protected'?'ЗАЩИТА АКТИВНА':'ОЖИДАНИЕ';document.getElementById('detail').textContent=s.errors?'Обнаружены ошибки или пропущенные элементы. Открой журнал событий, чтобы узнать, что именно не удалось скопировать.':'Последнее сканирование: '+s.lastScan+'. Изменения отслеживаются в фоне.';samples.push(Math.max(0,Number(s.speed)||0));if(samples.length>32)samples.shift();drawChart(s.scanning)}
+function updateStats(s){const mode=s.performanceMode||'balanced';document.querySelectorAll('[id^="mode"]').forEach(x=>x.classList.remove('primary'));const selected=document.getElementById(mode==='eco'?'modeEco':mode==='max'?'modeMax':'modeBalanced');if(selected)selected.classList.add('primary');document.getElementById('modeDescription').textContent=mode==='eco'?'Минимальная нагрузка, копирование медленнее':mode==='max'?'Приоритет скорости, возможна высокая нагрузка':'Умеренная нагрузка и хорошая отзывчивость ПК';document.getElementById('headline').textContent=s.headline;document.getElementById('bytes').textContent=fmtBytes(s.bytes);document.getElementById('files').textContent=fmtNum(s.files);document.getElementById('errors').textContent=fmtNum(s.errors);document.getElementById('speed').textContent=fmtSpeed(s.speed);document.getElementById('lastScan').textContent=s.lastScan;document.getElementById('destination').textContent=s.destination;document.querySelector('.drive-icon').textContent=(s.destination.match(/^[A-Za-z]:/)||['DISK'])[0];document.getElementById('sourceCount').textContent=fmtNum(s.sourceCount);document.getElementById('healthErrors').textContent=fmtNum(s.errors);document.getElementById('errorHint').textContent=s.errors?'Открой журнал и проверь причины':'Нет зарегистрированных ошибок';document.getElementById('scanHint').textContent=s.scanning?'Идёт сканирование':'Сейчас не копирует данные';document.getElementById('watchStatus').textContent='События + каждые 15 мин';document.getElementById('progressText').textContent=s.scanning?'Обработано файлов: '+fmtNum(s.seen):'Фоновое отслеживание изменений включено';document.getElementById('progress').classList.toggle('running',!!s.scanning);document.getElementById('progress').style.width=s.scanning?'35%':'0%';const pill=document.getElementById('pill');pill.className='status-pill '+(s.status==='attention'?'attention':s.status==='copying'?'copying':'');document.getElementById('pillText').textContent=s.status==='attention'?'ТРЕБУЕТСЯ ВНИМАНИЕ':s.status==='copying'?'КОПИРОВАНИЕ':s.status==='protected'?'ЗАЩИТА АКТИВНА':'ОЖИДАНИЕ';document.getElementById('detail').textContent=s.errors?'Обнаружены ошибки или пропущенные элементы. Открой журнал событий, чтобы узнать, что именно не удалось скопировать.':'Последнее сканирование: '+s.lastScan+'. Изменения отслеживаются в фоне.';samples.push(Math.max(0,Number(s.speed)||0));if(samples.length>32)samples.shift();drawChart(s.scanning)}
 function drawChart(scanning){const canvas=document.getElementById('chart'),ctx=canvas.getContext('2d'),r=canvas.getBoundingClientRect(),dpr=window.devicePixelRatio||1;canvas.width=Math.max(1,r.width*dpr);canvas.height=Math.max(1,r.height*dpr);ctx.scale(dpr,dpr);const w=r.width,h=r.height,p=12,vals=samples.length?samples:[0],max=Math.max(1,...vals);ctx.strokeStyle='#2b3730';ctx.lineWidth=1;for(let i=1;i<4;i++){let y=p+(h-p*2)*i/4;ctx.beginPath();ctx.moveTo(p,y);ctx.lineTo(w-p,y);ctx.stroke()}ctx.beginPath();vals.forEach((v,i)=>{const x=p+(w-p*2)*(i/Math.max(1,vals.length-1)),y=h-p-(h-p*2)*v/max;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)});ctx.lineWidth=2;ctx.strokeStyle='#9bf0b0';ctx.stroke();const last=vals[vals.length-1],x=p+(w-p*2)*(vals.length-1)/Math.max(1,vals.length-1),y=h-p-(h-p*2)*last/max;ctx.lineTo(x,h-p);ctx.lineTo(p,h-p);ctx.closePath();ctx.fillStyle='rgba(155,240,176,.08)';ctx.fill();document.getElementById('chartEmpty').style.display=scanning?'none':'grid';document.getElementById('chartLabel').textContent=scanning?'Скорость в реальном времени':'Последние замеры скорости'}
 function setNotice(text){const n=document.getElementById('notice');n.textContent=text;n.style.display='block';setTimeout(()=>n.style.display='none',6000)}window.addEventListener('resize',()=>drawChart(false));
 </script></body></html>
