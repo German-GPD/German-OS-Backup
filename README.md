@@ -16,7 +16,7 @@
 - Работает с низким приоритетом процесса и находится в системном трее.
 - Позволяет вручную запустить проверку, открыть папку копий и журнал, отключить автозапуск или выйти.
 
-## Установка
+## Installation
 
 1. Скачай ZIP по ссылке **[GermanOSBackup-win-x64.zip](https://github.com/German-GPD/German-OS-Backup/releases/latest/download/GermanOSBackup-win-x64.zip)** и распакуй его.
 2. Запусти `GermanOSBackup.exe`. При первом запуске Windows может показать предупреждение SmartScreen: приложение пока не подписано цифровым сертификатом.
