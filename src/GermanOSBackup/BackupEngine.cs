@@ -14,7 +14,9 @@ internal sealed class BackupEngine : IDisposable
 {
     private readonly AppConfig config; private readonly string logPath;
     private readonly SemaphoreSlim scanLock = new(1, 1);
-    private readonly SemaphoreSlim copySlots = new(Math.Clamp(Environment.ProcessorCount, 2, 6));
+    private readonly SemaphoreSlim ecoSlots = new(1, 1);
+    private readonly SemaphoreSlim balancedSlots = new(Math.Clamp(Environment.ProcessorCount / 2, 2, 3));
+    private readonly SemaphoreSlim maxSlots = new(Math.Clamp(Environment.ProcessorCount, 2, 6));
     private readonly List<FileSystemWatcher> watchers = new();
     private readonly CancellationTokenSource stop = new();
     private readonly object queueLock = new();
@@ -27,6 +29,15 @@ internal sealed class BackupEngine : IDisposable
 
     public BackupEngine(AppConfig config, string logPath) { this.config = config; this.logPath = logPath; }
     public BackupStats Stats => stats;
+    public string PerformanceMode => NormalizeMode(config.PerformanceMode);
+    public static string NormalizeMode(string? mode) => mode is "eco" or "max" ? mode : "balanced";
+
+    public void SetPerformanceMode(string mode)
+    {
+        config.PerformanceMode = NormalizeMode(mode);
+        Program.SaveConfig(config);
+        Log("Режим производительности изменён: " + config.PerformanceMode + ".");
+    }
     public static IEnumerable<(string Name, string Path)> Sources()
     {
         var drive = Path.GetPathRoot(Environment.GetFolderPath(Environment.SpecialFolder.Windows))!;
@@ -297,7 +308,9 @@ internal sealed class BackupEngine : IDisposable
 
     private async Task CopyFileAsync(string source, string target, CancellationToken ct)
     {
-        await copySlots.WaitAsync(ct);
+        var mode = PerformanceMode;
+        var slots = mode == "eco" ? ecoSlots : mode == "max" ? maxSlots : balancedSlots;
+        await slots.WaitAsync(ct);
         string? temp = null;
         try
         {
@@ -311,20 +324,28 @@ internal sealed class BackupEngine : IDisposable
                     Directory.CreateDirectory(Path.GetDirectoryName(target)!);
                     temp = target + ".gob-tmp-" + Environment.ProcessId + "-" + Guid.NewGuid().ToString("N");
                     long written = 0;
-                    await using (var input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1024 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan))
-                    await using (var output = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1024 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan))
+                    var bufferSize = mode == "eco" ? 128 * 1024 : mode == "balanced" ? 512 * 1024 : 1024 * 1024;
+                    await using (var input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, bufferSize, FileOptions.Asynchronous | FileOptions.SequentialScan))
+                    await using (var output = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None, bufferSize, FileOptions.Asynchronous | FileOptions.SequentialScan))
                     {
-                        var buffer = new byte[1024 * 1024]; int read;
-                        while ((read = await input.ReadAsync(buffer, ct)) > 0) { await output.WriteAsync(buffer.AsMemory(0, read), ct); written += read; }
+                        var buffer = new byte[bufferSize]; int read;
+                        while ((read = await input.ReadAsync(buffer, ct)) > 0)
+                        {
+                            await output.WriteAsync(buffer.AsMemory(0, read), ct);
+                            written += read;
+                            Interlocked.Add(ref bytesInWindow, read);
+                            UpdateSpeed();
+                            if (mode == "eco") await Task.Delay(8, ct);
+                        }
                         await output.FlushAsync(ct);
                     }
                     File.Move(temp, target, true); temp = null; File.SetLastWriteTimeUtc(target, src.LastWriteTimeUtc);
-                    Interlocked.Increment(ref stats.FilesCopied); Interlocked.Add(ref stats.BytesCopied, written); Interlocked.Add(ref bytesInWindow, written); UpdateSpeed(); return;
+                    Interlocked.Increment(ref stats.FilesCopied); Interlocked.Add(ref stats.BytesCopied, written); return;
                 }
                 catch (IOException) when (attempt < 2) { if (temp is not null) { try { File.Delete(temp); } catch { } temp = null; } await Task.Delay(300 * (attempt + 1), ct); }
             }
         }
-        finally { if (temp is not null) { try { File.Delete(temp); } catch { } } copySlots.Release(); }
+        finally { if (temp is not null) { try { File.Delete(temp); } catch { } } slots.Release(); }
     }
 
     private void UpdateSpeed()
