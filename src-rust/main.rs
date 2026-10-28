@@ -291,7 +291,7 @@ impl BackupApp {
                 for entry in WalkDir::new(&source).follow_links(false).into_iter().filter_map(Result::ok) {
                     if !entry.file_type().is_file() { continue; }
                     let relative = entry.path().strip_prefix(&source)?;
-                    let name = format!("{}/{}", source.file_name().unwrap_or_default().to_string_lossy(), relative.to_string_lossy().replace('\\\\', "/"));
+                    let name = format!("{}/{}", source.file_name().unwrap_or_default().to_string_lossy(), relative.to_string_lossy().replace('\\', "/"));
                     archive.start_file(name, options)?;
                     let mut input = fs::File::open(entry.path())?;
                     io::copy(&mut input, &mut archive)?;
