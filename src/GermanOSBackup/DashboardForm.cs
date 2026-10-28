@@ -8,6 +8,7 @@ internal sealed class DashboardForm : Form
     private readonly BackupEngine engine;
     private readonly bool startHidden;
     private readonly System.Windows.Forms.Timer uiTimer = new() { Interval = 1000 };
+    private readonly System.Windows.Forms.Timer scanTimer = new() { Interval = 15 * 60 * 1000 };
     private readonly Label status = Palette.Label("Подготовка…", 12, Palette.Green, true);
     private readonly Label headline = Palette.Label("Готовим резервную копию", 21, Palette.Text, true);
     private readonly Label details = Palette.Label("Подключаем источники и рассчитываем объём.", 10, Palette.Muted);
@@ -41,6 +42,7 @@ internal sealed class DashboardForm : Form
             if (!started) { started = true; await StartBackupAsync(); }
         };
         uiTimer.Tick += (_, _) => RefreshStats(); uiTimer.Start();
+        scanTimer.Tick += async (_, _) => await engine.RequestScanAsync(); scanTimer.Start();
         FormClosing += (_, e) => { if (!allowClose && e.CloseReason == CloseReason.UserClosing) { e.Cancel = true; Hide(); tray.ShowBalloonTip(1800, "German OS Backup", "Программа продолжает работу в фоне.", ToolTipIcon.Info); } };
     }
 
@@ -102,5 +104,5 @@ internal sealed class DashboardForm : Form
     private void ShowWindow() { Show(); WindowState = FormWindowState.Normal; Activate(); }
     private void OpenDestination() { try { Process.Start(new ProcessStartInfo(config.Destination) { UseShellExecute = true }); } catch { } }
     private static void OpenFile(string path) { try { if (!File.Exists(path)) File.WriteAllText(path, "German OS Backup log"); Process.Start(new ProcessStartInfo(path) { UseShellExecute = true }); } catch { } }
-    protected override void OnFormClosed(FormClosedEventArgs e) { uiTimer.Stop(); uiTimer.Dispose(); tray.Visible = false; tray.Dispose(); engine.Dispose(); base.OnFormClosed(e); }
+    protected override void OnFormClosed(FormClosedEventArgs e) { uiTimer.Stop(); uiTimer.Dispose(); scanTimer.Stop(); scanTimer.Dispose(); tray.Visible = false; tray.Dispose(); engine.Dispose(); base.OnFormClosed(e); }
 }
