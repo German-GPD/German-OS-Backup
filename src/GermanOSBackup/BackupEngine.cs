@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Security.Cryptography;
 
 namespace GermanOSBackup;
 
@@ -74,6 +75,71 @@ internal sealed class BackupEngine : IDisposable
     public void StopCurrentScan()
     {
         lock (scanCancellationLock) activeScan?.Cancel();
+    }
+
+    public async Task<(long Checked, long Missing, long Different)> VerifyBackupAsync(CancellationToken cancellationToken = default)
+    {
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(stop.Token, cancellationToken);
+        var ct = linked.Token;
+        await scanLock.WaitAsync(ct).ConfigureAwait(false);
+        long checkedFiles = 0, missing = 0, different = 0;
+        try
+        {
+            stats.IsScanning = true;
+            foreach (var (_, source, targetRoot) in ConfiguredSources())
+            {
+                ct.ThrowIfCancellationRequested();
+                if (!Directory.Exists(source)) continue;
+                var stack = new Stack<(string Source, string Target)>();
+                stack.Push((source, targetRoot));
+                while (stack.Count > 0)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    var (from, to) = stack.Pop();
+                    string[] dirs, files;
+                    try { dirs = Directory.GetDirectories(from); files = Directory.GetFiles(from); }
+                    catch (Exception ex) { Interlocked.Increment(ref stats.Errors); Log($"Глубокая проверка: папка пропущена {from}: {ex.Message}"); continue; }
+                    foreach (var dir in dirs)
+                    {
+                        try
+                        {
+                            if ((File.GetAttributes(dir) & FileAttributes.ReparsePoint) == 0)
+                                stack.Push((dir, Path.Combine(to, Path.GetFileName(dir)));
+                        }
+                        catch (Exception ex) { Interlocked.Increment(ref stats.Errors); Log($"Глубокая проверка папки {dir}: {ex.Message}"); }
+                    }
+                    foreach (var file in files)
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        var target = Path.Combine(to, Path.GetFileName(file));
+                        try
+                        {
+                            if (!File.Exists(target)) { missing++; Log($"Глубокая проверка: отсутствует копия {target}"); continue; }
+                            await using var original = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1024 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
+                            await using var backup = new FileStream(target, FileMode.Open, FileAccess.Read, FileShare.Read, 1024 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
+                            var originalHash = await SHA256.HashDataAsync(original, ct).ConfigureAwait(false);
+                            var backupHash = await SHA256.HashDataAsync(backup, ct).ConfigureAwait(false);
+                            if (!CryptographicOperations.FixedTimeEquals(originalHash, backupHash))
+                            {
+                                different++;
+                                Log($"Глубокая проверка: содержимое отличается {target}");
+                            }
+                            checkedFiles++;
+                        }
+                        catch (OperationCanceledException) { throw; }
+                        catch (Exception ex) { different++; Interlocked.Increment(ref stats.Errors); Log($"Глубокая проверка файла {file}: {ex.Message}"); }
+                    }
+                }
+            }
+            Log($"Глубокая проверка завершена. Проверено: {checkedFiles:N0}; отсутствует: {missing:N0}; отличаются/ошибки: {different:N0}.");
+            return (checkedFiles, missing, different);
+        }
+        finally
+        {
+            stats.IsScanning = false;
+            stats.LastScanFinished = DateTime.Now;
+            scanLock.Release();
+        }
     }
 
     public async Task RequestScanAsync()
