@@ -51,38 +51,61 @@ internal sealed class DashboardForm : Form
         tray.DoubleClick += (_, _) => ShowWindow();
 
         Controls.Add(web);
-        web.CoreWebView2InitializationCompleted += (_, e) =>
-        {
-            if (!e.IsSuccess)
-            {
-                MessageBox.Show(this, "Не удалось запустить веб-интерфейс. Обнови Microsoft Edge WebView2 Runtime.", "German OS Backup", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
-            }
-            web.CoreWebView2.WebMessageReceived += async (_, args) =>
-            {
-                try
-                {
-                    using var json = JsonDocument.Parse(args.WebMessageAsJson);
-                    var action = json.RootElement.TryGetProperty("action", out var value) ? value.GetString() : "";
-                    await HandleActionAsync(action ?? "", json.RootElement);
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show(this, ex.Message, "German OS Backup", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                }
-            };
-            web.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
-            web.CoreWebView2.Settings.AreDevToolsEnabled = false;
-            web.CoreWebView2.NavigationCompleted += (_, _) => { webReady = true; RefreshStats(); };
-            web.NavigateToString(Html);
-        };
         Shown += async (_, _) =>
         {
-            try { await web.EnsureCoreWebView2Async(); }
+            try
+            {
+                // Keep WebView2's profile in a user-writable location instead of the
+                // install directory; this avoids common first-run/permission failures.
+                var webViewData = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "GermanOSBackup", "WebView2");
+                Directory.CreateDirectory(webViewData);
+
+                await web.EnsureCoreWebView2Async(
+                    await CoreWebView2Environment.CreateAsync(null, webViewData));
+
+                web.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
+                web.CoreWebView2.Settings.AreDevToolsEnabled = false;
+                web.CoreWebView2.WebMessageReceived += async (_, args) =>
+                {
+                    try
+                    {
+                        using var json = JsonDocument.Parse(args.WebMessageAsJson);
+                        var action = json.RootElement.TryGetProperty("action", out var value) ? value.GetString() : "";
+                        await HandleActionAsync(action ?? "", json.RootElement);
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show(this, ex.Message, "German OS Backup", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    }
+                };
+                web.CoreWebView2.NavigationCompleted += (_, args) =>
+                {
+                    if (!args.IsSuccess)
+                    {
+                        Program.Log("WebView2 navigation failed: " + args.WebErrorStatus);
+                        MessageBox.Show(this, "Web-интерфейс не загрузился: " + args.WebErrorStatus +
+                            "\\nПодробности записаны в журнал: " + Program.LogPath,
+                            "German OS Backup", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        return;
+                    }
+                    webReady = true;
+                    RefreshStats();
+                };
+                web.NavigateToString(Html);
+            }
             catch (Exception ex)
             {
-                MessageBox.Show(this, "Для интерфейса требуется Microsoft Edge WebView2 Runtime. " + ex.Message, "German OS Backup", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Program.Log("WebView2 initialization failed: " + ex);
+                MessageBox.Show(this,
+                    "Не удалось запустить WebView2.\\n\\n" +
+                    ex.Message + "\\n\\n" +
+                    "Проверь журнал: " + Program.LogPath +
+                    "\\n\\nЕсли Runtime уже установлен, это может быть проблема профиля WebView2 или его прав доступа.",
+                    "German OS Backup", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+
             if (startHidden) Hide();
             if (!started)
             {
