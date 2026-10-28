@@ -19,20 +19,24 @@ jobs:
         id: version
         shell: pwsh
         run: echo "version=$((Get-Content version.txt -Raw).Trim())" >> $env:GITHUB_OUTPUT
+      - uses: actions/checkout@v4
+        with:
+          ref: rust
+          path: rust-source
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-pc-windows-msvc
       - name: Build Rust Edition
-        run: cargo build --release --target x86_64-pc-windows-msvc
+        run: cargo build --manifest-path .\rust-source\Cargo.toml --release --target x86_64-pc-windows-msvc --target-dir .\rust-source\target
       - name: Prepare Rust installer
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path .\publish | Out-Null
-          Copy-Item .\target\x86_64-pc-windows-msvc\release\GermanOSBackup-Rust.exe .\publish\GermanOSBackup-Rust.exe
+          New-Item -ItemType Directory -Force -Path .\rust-source\publish | Out-Null
+          Copy-Item .\rust-source\target\x86_64-pc-windows-msvc\release\GermanOSBackup-Rust.exe .\rust-source\publish\GermanOSBackup-Rust.exe
       - name: Install Inno Setup
         run: choco install innosetup --yes --no-progress
       - name: Package Rust Edition
-        run: iscc /DAppVersion=${{ steps.version.outputs.version }} .\installer\GermanOSBackup-Rust.iss
+        run: iscc /DAppVersion=${{ steps.version.outputs.version }} .\rust-source\installer\GermanOSBackup-Rust.iss
       - uses: actions/checkout@v4
         with:
           ref: cs
@@ -47,7 +51,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: GermanOSBackup-Rust-Setup-x64
-          path: .\installer\output\GermanOSBackup-Rust-Setup-x64.exe
+          path: .\rust-source\installer\output\GermanOSBackup-Rust-Setup-x64.exe
           if-no-files-found: error
           retention-days: 90
       - uses: actions/upload-artifact@v4
@@ -60,7 +64,7 @@ jobs:
         if: github.ref == 'refs/heads/main'
         shell: pwsh
         run: |
-          $rust = ".\installer\output\GermanOSBackup-Rust-Setup-x64.exe"
+          $rust = ".\rust-source\installer\output\GermanOSBackup-Rust-Setup-x64.exe"
           $cs = ".\cs-source\installer\output\GermanOSBackup-CS-Setup-x64.exe"
           if (!(Test-Path $rust)) { throw "Rust installer missing: $rust" }
           if (!(Test-Path $cs)) { throw "C# installer missing: $cs" }
@@ -78,7 +82,7 @@ jobs:
             - GermanOSBackup-CS-Setup-x64.exe — C# Edition с WebView2.
             Настройки и резервные копии хранятся отдельно от файлов программы.
           files: |
-            installer/output/GermanOSBackup-Rust-Setup-x64.exe
+            rust-source/installer/output/GermanOSBackup-Rust-Setup-x64.exe
             cs-source/installer/output/GermanOSBackup-CS-Setup-x64.exe
           overwrite_files: true
           make_latest: true
