@@ -42,5 +42,6 @@ jobs:
             Скачайте GermanOSBackup-Setup-x64.exe и запустите. Установщик добавит автозапуск; при первом старте приложение предупредит о нагрузке и попросит выбрать папку копии.
             Программа не подписана цифровым сертификатом, поэтому SmartScreen может предупредить о неизвестном издателе.
           files: installer/output/GermanOSBackup-Setup-x64.exe
+          overwrite_files: true
           make_latest: true
           fail_on_unmatched_files: true
