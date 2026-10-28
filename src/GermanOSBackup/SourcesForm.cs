@@ -82,7 +82,7 @@ internal sealed class SourcesForm : Form
     {
         var path = node.Tag?.ToString(); if (path == null || (node.Nodes.Count == 1 && node.Nodes[0].Text != "…")) return;
         node.Nodes.Clear(); try { foreach (var dir in Directory.GetDirectories(path).OrderBy(x => x, StringComparer.OrdinalIgnoreCase)) { var child = new TreeNode(Path.GetFileName(dir)) { Tag = dir }; try { if (Directory.GetDirectories(dir).Length > 0) child.Nodes.Add(new TreeNode("…")); } catch { } node.Nodes.Add(child); } } catch { }
-        loading = true; foreach (TreeNode child in node.Nodes) child.Checked = config.SelectedSources?.Any(s => string.Equals(s, child.Tag?.ToString(), StringComparison.OrdinalIgnoreCase) || IsSameOrChild(child.Tag?.ToString() ?? "", s)) == true; loading = false;
+        loading = true; foreach (TreeNode child in node.Nodes) child.Checked = config.SelectedSources?.Any(s => string.Equals(s, child.Tag?.ToString(), StringComparison.OrdinalIgnoreCase) || IsSameOrChild(s, child.Tag?.ToString() ?? "")) == true; loading = false;
     }
     private void SetChildren(TreeNode node, bool value) { loading = true; foreach (TreeNode child in node.Nodes) { if (child.Text == "…") continue; child.Checked = value; SetChildren(child, value); } loading = false; }
     private IEnumerable<string> GetSelectedRoots() { foreach (TreeNode node in tree.Nodes) foreach (var p in Selected(node, false)) yield return p; }
