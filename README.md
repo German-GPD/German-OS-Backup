@@ -1,46 +1,50 @@
 # German OS Backup
 
-> **Windows x64 · Rust Edition и C# Edition** · [Релизы и установщики](https://github.com/German-GPD/German-OS-Backup/releases)
+> **Windows 10/11 · x64 · Rust Edition + C# Edition**  
+> [Сайт проекта](https://german-gpd.github.io/German-OS-Backup/) · [Релизы](https://github.com/German-GPD/German-OS-Backup/releases) · [Сообщить об ошибке](https://github.com/German-GPD/German-OS-Backup/issues)
 
-Локальное резервное копирование без рекламы, аккаунтов и телеметрии. Выбери редакцию — у каждой собственный установщик, EXE и подпись в интерфейсе.
+Локальная файловая резервная копия без рекламы, аккаунтов и телеметрии. Выбирай редакцию по интерфейсу и набору функций.
 
 ## Скачать
 
-Выбери одну из двух редакций:
+| Редакция | Что внутри | Установщик |
+|---|---|---|
+| **Rust Edition** | Нативный интерфейс, SHA-256, восстановление отсутствующих файлов, ZIP-архив | [**↓ Скачать Rust Edition**](https://github.com/German-GPD/German-OS-Backup/releases/latest/download/GermanOSBackup-Rust-Setup-x64.exe) |
+| **C# Edition** | Windows Forms + WebView2, системный трей, журнал, режимы нагрузки, проверка обновлений | [**↓ Скачать C# Edition**](https://github.com/German-GPD/German-OS-Backup/releases/latest/download/GermanOSBackup-CS-Setup-x64.exe) |
 
-[![Скачать Rust Edition](https://img.shields.io/badge/↓_Скачать-Rust_Edition-9bf0ad?style=for-the-badge&logo=rust&logoColor=102017)](https://github.com/German-GPD/German-OS-Backup/releases/latest/download/GermanOSBackup-Rust-Setup-x64.exe)  
-[![Скачать C# Edition](https://img.shields.io/badge/↓_Скачать-C%23_Edition-252d28?style=for-the-badge&logo=dotnet&logoColor=ffffff)](https://github.com/German-GPD/German-OS-Backup/releases/latest/download/GermanOSBackup-CS-Setup-x64.exe)
+Оба установщика публикуются **одним релизом**, только если сборка обеих редакций завершилась успешно. Имена приложений не пересекаются: `GermanOSBackup-Rust.exe` и `GermanOSBackup-CS.exe`.
 
-- **Rust Edition** — нативный интерфейс без WebView2. Установщик: `GermanOSBackup-Rust-Setup-x64.exe`; приложение: `GermanOSBackup-Rust.exe`.
-- **C# Edition** — Windows Forms + WebView2, системный трей и проверка обновлений. Установщик: `GermanOSBackup-CS-Setup-x64.exe`; приложение: `GermanOSBackup-CS.exe`.
+## Структура веток
 
-Оба установщика публикуются одним релизом только после успешной сборки обеих редакций.
-
-Сайт: https://german-gpd.github.io/German-OS-Backup/
-
-## Ветки
-
-- `main` — сайт, README, общая документация и единая публикация релизов.
-- `rust` — исходный код Rust Edition.
-- `cs` — исходный код C# Edition.
+- `main` — сайт, общая документация, версия и атомарная сборка релиза.
+- `rust` — исходники и отдельная сборка Rust Edition.
+- `cs` — исходники и отдельная сборка C# Edition.
 
 ## Возможности
 
-- Локальное резервное копирование выбранных папок на отдельный диск.
-- Ручное сканирование источников и копирование новых или изменившихся файлов.
-- Копии не удаляются автоматически при удалении оригиналов.
-- Выбор источников и папки назначения.
-- Счётчики скопированных и пропущенных файлов, ошибки и скорость.
-- Мониторинг загрузки CPU и памяти.
-- Проверка целостности по SHA-256, восстановление отсутствующих файлов и создание ZIP-архива в Rust Edition.
-- C# Edition включает системный трей, журнал, режимы нагрузки, проверку обновлений и встроенную панель WebView2. Копирование запускается пользователем вручную.
-- Без рекламы, аккаунтов, аналитики и фоновой телеметрии.
+- Выбор папок-источников и отдельного каталога назначения.
+- Ручной запуск и остановка копирования; новые и изменённые файлы копируются повторно.
+- Сохранение копии, даже если исходный файл удалён позднее.
+- Счётчики файлов, скорость, ошибки и мониторинг системных ресурсов.
+- Проверка целостности файлов по SHA-256.
+- Восстановление отсутствующих файлов без перезаписи существующих.
+- Создание ZIP-архива (в Rust Edition и C# Edition).
+- Настройки и журнал хранятся локально; сетевой запрос выполняется только при ручной проверке обновлений C# Edition.
 
-## Сборка
+## Установка и использование
+
+1. Скачай установщик выбранной редакции.
+2. Запусти его и открой **German OS Backup {Edition}**.
+3. Выбери папки, которые нужно сохранить.
+4. Укажи папку назначения на другом диске.
+5. Проверь настройки и вручную запусти копирование.
+6. Периодически запускай проверку целостности и проверяй, что важные файлы открываются.
+
+## Сборка из исходников
 
 ### Rust Edition
 
-Требуется стабильный Rust toolchain и Windows SDK для цели `x86_64-pc-windows-msvc`.
+Нужны стабильный Rust toolchain и компоненты Windows для цели MSVC.
 
 ```powershell
 cargo build --release --target x86_64-pc-windows-msvc
@@ -48,17 +52,19 @@ cargo build --release --target x86_64-pc-windows-msvc
 
 ### C# Edition
 
-Требуются .NET 10 SDK и Inno Setup 6.
+Нужны .NET 10 SDK и Inno Setup 6.
 
 ```powershell
 dotnet publish .\src\GermanOSBackup\GermanOSBackup.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o .\publish
 iscc .\installer\GermanOSBackup-CS.iss
 ```
 
-## Безопасность и ограничения
+## Важные ограничения
 
-Это файловая резервная копия, а не образ Windows и не средство полного восстановления системы. Доступ к защищённым и занятым файлам зависит от разрешений Windows. Для важных данных держи дополнительную копию на отдельном физическом носителе.
+Это **файловая резервная копия**, а не образ Windows: программа не сохраняет загрузчик и не обещает восстановление операционной системы целиком. Файлы, заблокированные другим приложением или недоступные текущему пользователю, могут не скопироваться — смотри журнал ошибок. Восстановление пропускает существующие файлы и не заменяет их автоматически.
+
+Для важных данных храни ещё одну копию на отдельном физическом носителе. Наличие установщика не означает, что Windows подписывает программу доверенным сертификатом; при первом запуске SmartScreen может показать предупреждение.
 
 ## Лицензия
 
-MIT. [Сообщить об ошибке](https://github.com/German-GPD/German-OS-Backup/issues).
+MIT. Смотри [LICENSE](LICENSE).
