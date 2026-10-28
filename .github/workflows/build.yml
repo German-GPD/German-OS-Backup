@@ -1,8 +1,7 @@
-name: Build Windows app
+name: Build and package Windows installer
 on:
   push:
     branches: [main]
-    tags: ["v*"]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -19,18 +18,19 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
-      - name: Publish self-contained EXE
+      - name: Publish self-contained application
         run: dotnet publish .\src\GermanOSBackup\GermanOSBackup.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o .\publish
-      - name: Package
-        shell: pwsh
-        run: Compress-Archive -Path .\publish\GermanOSBackup.exe -DestinationPath .\GermanOSBackup-win-x64.zip -Force
+      - name: Install Inno Setup
+        run: choco install innosetup --yes --no-progress
+      - name: Build installer
+        run: iscc .\installer\GermanOSBackup.iss
       - uses: actions/upload-artifact@v4
         with:
-          name: GermanOSBackup-win-x64
-          path: GermanOSBackup-win-x64.zip
+          name: GermanOSBackup-Setup-x64
+          path: .\installer\output\GermanOSBackup-Setup-x64.exe
           if-no-files-found: error
           retention-days: 90
-      - name: Publish stable download
+      - name: Publish latest installer
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
@@ -38,10 +38,9 @@ jobs:
           target_commitish: main
           name: German OS Backup — Windows x64
           body: |
-            Стабильная сборка German OS Backup для Windows x64.
-
-            Скачайте GermanOSBackup-win-x64.zip, распакуйте архив и запустите GermanOSBackup.exe.
-            Программа пока не подписана цифровым сертификатом; Windows SmartScreen может показать предупреждение.
-          files: GermanOSBackup-win-x64.zip
+            Установщик German OS Backup для Windows x64.
+            Скачайте GermanOSBackup-Setup-x64.exe и запустите. Установщик добавит автозапуск; при первом старте приложение предупредит о нагрузке и попросит выбрать папку копии.
+            Программа не подписана цифровым сертификатом, поэтому SmartScreen может предупредить о неизвестном издателе.
+          files: installer/output/GermanOSBackup-Setup-x64.exe
           make_latest: true
           fail_on_unmatched_files: true
