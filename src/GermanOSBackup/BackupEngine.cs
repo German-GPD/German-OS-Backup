@@ -71,6 +71,11 @@ internal sealed class BackupEngine : IDisposable
         }
     }
 
+    public void StopCurrentScan()
+    {
+        lock (scanCancellationLock) activeScan?.Cancel();
+    }
+
     public async Task RequestScanAsync()
     {
         // Directory enumeration can block on slow, sleeping or unhealthy drives.
@@ -79,6 +84,8 @@ internal sealed class BackupEngine : IDisposable
         try { await scanLock.WaitAsync(stop.Token).ConfigureAwait(false); }
         catch (OperationCanceledException) { return; }
         if (Volatile.Read(ref disposed) != 0) { scanLock.Release(); return; }
+        using var operation = CancellationTokenSource.CreateLinkedTokenSource(stop.Token);
+        lock (scanCancellationLock) activeScan = operation;
 
         await Task.Run(async () =>
         {
@@ -88,8 +95,8 @@ internal sealed class BackupEngine : IDisposable
             {
                 foreach (var (name, source, targetRoot) in ConfiguredSources())
                 {
-                    stop.Token.ThrowIfCancellationRequested();
-                    if (Directory.Exists(source)) await CopyTreeAsync(name, source, targetRoot, stop.Token).ConfigureAwait(false);
+                    operation.Token.ThrowIfCancellationRequested();
+                    if (Directory.Exists(source)) await CopyTreeAsync(name, source, targetRoot, operation.Token).ConfigureAwait(false);
                 }
 
                 if (!stop.IsCancellationRequested) stats.HasCompletedInitialScan = true;
@@ -104,6 +111,7 @@ internal sealed class BackupEngine : IDisposable
             {
                 stats.IsScanning = false;
                 stats.LastScanFinished = DateTime.Now;
+                lock (scanCancellationLock) { if (ReferenceEquals(activeScan, operation)) activeScan = null; }
                 scanLock.Release();
                 Log($"Сканирование завершено за {(DateTime.UtcNow - startedAt).TotalMinutes:0.0} мин. Всего скопировано файлов: {Interlocked.Read(ref stats.FilesCopied):N0}.");
             }
