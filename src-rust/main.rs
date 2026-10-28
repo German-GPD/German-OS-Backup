@@ -279,7 +279,7 @@ impl eframe::App for BackupApp {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if self.last_stats.running {
                         if ui.button("■ Остановить").clicked() { self.stop_backup(); }
-                    } else if ui.button(RichText::new("▶ Начать копирование").color(Color32::from_rgb(13,16,15))).fill(green).clicked() {
+                    } else if ui.add(egui::Button::new(RichText::new("▶ Начать копирование").color(Color32::from_rgb(13,16,15))).fill(green)).clicked() {
                         self.start_backup();
                     }
                 });
