@@ -40,8 +40,12 @@ jobs:
         run: dotnet publish .\src\GermanOSBackup\GermanOSBackup.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o .\publish
       - name: Install Inno Setup
         run: choco install innosetup --yes --no-progress
+      - name: Read current version
+        id: version
+        shell: pwsh
+        run: echo "version=$((Get-Content version.txt -Raw).Trim())" >> $env:GITHUB_OUTPUT
       - name: Build installer
-        run: iscc .\installer\GermanOSBackup.iss
+        run: iscc /DAppVersion=${{ steps.version.outputs.version }} .\installer\GermanOSBackup.iss
       - uses: actions/upload-artifact@v4
         with:
           name: GermanOSBackup-Setup-x64
