@@ -178,7 +178,7 @@ internal sealed class DashboardForm : Form
 
         var bottom = CreateCard();
         bottom.Padding = new Padding(18, 12, 18, 12);
-        var bottomLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 3, BackColor = Palette.Panel, Margin = Padding.Empty };
+        var bottomLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 4, BackColor = Palette.Panel, Margin = Padding.Empty };
         bottomLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         bottomLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 190));
         bottomLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 20));
@@ -207,7 +207,6 @@ internal sealed class DashboardForm : Form
         bottomLayout.Controls.Add(progressRow, 0, 3);
         bottomLayout.SetColumnSpan(progressRow, 2);
         // Reserve a fourth row for the live progress indicator.
-        bottomLayout.RowCount = 4;
         bottomLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
         bottom.Controls.Add(bottomLayout);
         root.Controls.Add(bottom, 0, 5);
