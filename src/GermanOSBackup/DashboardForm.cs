@@ -32,6 +32,18 @@ internal sealed class DashboardForm : Form
         menu.Items.Add("Открыть папку копий", null, (_, _) => OpenDestination());
         menu.Items.Add("Проверить сейчас", null, async (_, _) => await engine.RequestScanAsync());
         menu.Items.Add("Остановить текущую проверку", null, (_, _) => engine.StopCurrentScan());
+        menu.Items.Add("Глубокая проверка (SHA-256)", null, async (_, _) =>
+        {
+            try
+            {
+                details.Text = "Глубокая проверка: сверяем содержимое файлов по SHA-256…";
+                var result = await engine.VerifyBackupAsync();
+                MessageBox.Show(this, $"Проверено файлов: {result.Checked:N0}\\nНет копии: {result.Missing:N0}\\nОтличается или ошибка: {result.Different:N0}", "Глубокая проверка", MessageBoxButtons.OK, result.Missing + result.Different == 0 ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+            }
+            catch (OperationCanceledException) { details.Text = "Глубокая проверка остановлена."; }
+            catch (Exception ex) { MessageBox.Show(this, ex.Message, "Ошибка проверки", MessageBoxButtons.OK, MessageBoxIcon.Error); }
+        });
+        menu.Items.Add("Восстановить из копии…", null, (_, _) => { using var form = new RestoreForm(config.Destination); form.ShowDialog(this); });
         menu.Items.Add("Открыть журнал", null, (_, _) => OpenFile(Program.LogPath));
         menu.Items.Add(new ToolStripSeparator()); menu.Items.Add("Выход", null, (_, _) => { allowClose = true; Close(); });
         tray = new NotifyIcon { Text = "German OS Backup", Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? SystemIcons.Shield, ContextMenuStrip = menu, Visible = true };
