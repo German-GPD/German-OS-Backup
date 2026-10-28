@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Security.Cryptography;
 
 namespace GermanOSBackup;
 
@@ -21,6 +22,8 @@ internal sealed class BackupEngine : IDisposable
     private readonly BackupStats stats = new();
     private readonly Stopwatch speedClock = Stopwatch.StartNew();
     private long bytesInWindow; private int disposed; private int started;
+    private readonly object scanCancellationLock = new();
+    private CancellationTokenSource? activeScan;
 
     public BackupEngine(AppConfig config, string logPath) { this.config = config; this.logPath = logPath; }
     public BackupStats Stats => stats;
@@ -34,46 +37,158 @@ internal sealed class BackupEngine : IDisposable
     {
         if (Interlocked.Exchange(ref started, 1) != 0) return;
         Directory.CreateDirectory(config.Destination);
-        foreach (var (_, source) in Sources())
-        {
-            if (!Directory.Exists(source)) continue;
-            try
-            {
-                var watcher = new FileSystemWatcher(source) { IncludeSubdirectories = true, NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.LastWrite | NotifyFilters.Size, InternalBufferSize = 64 * 1024 };
-                watcher.Created += (_, e) => Queue(e.FullPath); watcher.Changed += (_, e) => Queue(e.FullPath); watcher.Renamed += (_, e) => Queue(e.FullPath);
-                watcher.Error += (_, _) => _ = RequestScanAsync(); watcher.EnableRaisingEvents = true; watchers.Add(watcher);
-            }
-            catch (Exception ex) { Log($"Наблюдение недоступно для {source}: {ex.Message}"); }
-        }
+        RefreshWatchers();
         _ = Task.Run(ProcessQueueAsync);
         await RequestScanAsync();
     }
 
-    public async Task RequestScanAsync()
+    public void RefreshWatchers()
     {
-        if (Volatile.Read(ref disposed) != 0 || !await scanLock.WaitAsync(0)) return;
-        stats.IsScanning = true; var startedAt = DateTime.UtcNow;
-        try
+        if (Volatile.Read(ref disposed) != 0) return;
+        lock (watchers)
         {
-            foreach (var (name, source) in Sources())
+            foreach (var watcher in watchers) watcher.Dispose();
+            watchers.Clear();
+            foreach (var (_, source, _) in ConfiguredSources())
             {
-                if (stop.IsCancellationRequested) break;
-                if (Directory.Exists(source)) await CopyTreeAsync(name, source, stop.Token);
+                if (!Directory.Exists(source)) continue;
+                try
+                {
+                    var watcher = new FileSystemWatcher(source)
+                    {
+                        IncludeSubdirectories = true,
+                        NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.LastWrite | NotifyFilters.Size,
+                        InternalBufferSize = 64 * 1024
+                    };
+                    watcher.Created += (_, e) => Queue(e.FullPath);
+                    watcher.Changed += (_, e) => Queue(e.FullPath);
+                    watcher.Renamed += (_, e) => Queue(e.FullPath);
+                    watcher.Error += (_, _) => _ = RequestScanAsync();
+                    watchers.Add(watcher);
+                    watcher.EnableRaisingEvents = true;
+                }
+                catch (Exception ex) { Log($"Наблюдение недоступно для {source}: {ex.Message}"); }
             }
-            if (!stop.IsCancellationRequested) stats.HasCompletedInitialScan = true;
-        }
-        catch (OperationCanceledException) { }
-        catch (Exception ex) { Interlocked.Increment(ref stats.Errors); Log($"Ошибка сканирования: {ex}"); }
-        finally
-        {
-            stats.IsScanning = false; stats.LastScanFinished = DateTime.Now; scanLock.Release();
-            Log($"Сканирование завершено за {(DateTime.UtcNow - startedAt).TotalMinutes:0.0} мин. Всего скопировано файлов: {Interlocked.Read(ref stats.FilesCopied):N0}.");
         }
     }
 
-    private async Task CopyTreeAsync(string name, string source, CancellationToken ct)
+    public void StopCurrentScan()
     {
-        var rootTarget = Path.Combine(config.Destination, name); Directory.CreateDirectory(rootTarget);
+        lock (scanCancellationLock) activeScan?.Cancel();
+    }
+
+    public async Task<(long Checked, long Missing, long Different)> VerifyBackupAsync(CancellationToken cancellationToken = default)
+    {
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(stop.Token, cancellationToken);
+        var ct = linked.Token;
+        await scanLock.WaitAsync(ct).ConfigureAwait(false);
+        lock (scanCancellationLock) activeScan = linked;
+        long checkedFiles = 0, missing = 0, different = 0;
+        try
+        {
+            stats.IsScanning = true;
+            foreach (var (_, source, targetRoot) in ConfiguredSources())
+            {
+                ct.ThrowIfCancellationRequested();
+                if (!Directory.Exists(source)) continue;
+                var stack = new Stack<(string Source, string Target)>();
+                stack.Push((source, targetRoot));
+                while (stack.Count > 0)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    var (from, to) = stack.Pop();
+                    string[] dirs, files;
+                    try { dirs = Directory.GetDirectories(from); files = Directory.GetFiles(from); }
+                    catch (Exception ex) { Interlocked.Increment(ref stats.Errors); Log($"Глубокая проверка: папка пропущена {from}: {ex.Message}"); continue; }
+                    foreach (var dir in dirs)
+                    {
+                        try
+                        {
+                            if ((File.GetAttributes(dir) & FileAttributes.ReparsePoint) == 0)
+                                stack.Push((dir, Path.Combine(to, Path.GetFileName(dir))));
+                        }
+                        catch (Exception ex) { Interlocked.Increment(ref stats.Errors); Log($"Глубокая проверка папки {dir}: {ex.Message}"); }
+                    }
+                    foreach (var file in files)
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        var target = Path.Combine(to, Path.GetFileName(file));
+                        try
+                        {
+                            if (!File.Exists(target)) { missing++; Log($"Глубокая проверка: отсутствует копия {target}"); continue; }
+                            await using var original = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1024 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
+                            await using var backup = new FileStream(target, FileMode.Open, FileAccess.Read, FileShare.Read, 1024 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
+                            var originalHash = await SHA256.HashDataAsync(original, ct).ConfigureAwait(false);
+                            var backupHash = await SHA256.HashDataAsync(backup, ct).ConfigureAwait(false);
+                            if (!CryptographicOperations.FixedTimeEquals(originalHash, backupHash))
+                            {
+                                different++;
+                                Log($"Глубокая проверка: содержимое отличается {target}");
+                            }
+                            checkedFiles++;
+                        }
+                        catch (OperationCanceledException) { throw; }
+                        catch (Exception ex) { different++; Interlocked.Increment(ref stats.Errors); Log($"Глубокая проверка файла {file}: {ex.Message}"); }
+                    }
+                }
+            }
+            Log($"Глубокая проверка завершена. Проверено: {checkedFiles:N0}; отсутствует: {missing:N0}; отличаются/ошибки: {different:N0}.");
+            return (checkedFiles, missing, different);
+        }
+        finally
+        {
+            stats.IsScanning = false;
+            stats.LastScanFinished = DateTime.Now;
+            lock (scanCancellationLock) { if (ReferenceEquals(activeScan, linked)) activeScan = null; }
+            scanLock.Release();
+        }
+    }
+
+    public async Task RequestScanAsync()
+    {
+        // Directory enumeration can block on slow, sleeping or unhealthy drives.
+        // Keep every filesystem walk off the WinForms UI thread.
+        if (Volatile.Read(ref disposed) != 0) return;
+        try { await scanLock.WaitAsync(stop.Token).ConfigureAwait(false); }
+        catch (OperationCanceledException) { return; }
+        if (Volatile.Read(ref disposed) != 0) { scanLock.Release(); return; }
+        using var operation = CancellationTokenSource.CreateLinkedTokenSource(stop.Token);
+        lock (scanCancellationLock) activeScan = operation;
+
+        await Task.Run(async () =>
+        {
+            stats.IsScanning = true;
+            var startedAt = DateTime.UtcNow;
+            try
+            {
+                foreach (var (name, source, targetRoot) in ConfiguredSources())
+                {
+                    operation.Token.ThrowIfCancellationRequested();
+                    if (Directory.Exists(source)) await CopyTreeAsync(name, source, targetRoot, operation.Token).ConfigureAwait(false);
+                }
+
+                if (!stop.IsCancellationRequested) stats.HasCompletedInitialScan = true;
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                Interlocked.Increment(ref stats.Errors);
+                Log($"Ошибка сканирования: {ex}");
+            }
+            finally
+            {
+                stats.IsScanning = false;
+                stats.LastScanFinished = DateTime.Now;
+                lock (scanCancellationLock) { if (ReferenceEquals(activeScan, operation)) activeScan = null; }
+                scanLock.Release();
+                Log($"Сканирование завершено за {(DateTime.UtcNow - startedAt).TotalMinutes:0.0} мин. Всего скопировано файлов: {Interlocked.Read(ref stats.FilesCopied):N0}.");
+            }
+        }).ConfigureAwait(false);
+    }
+
+    private async Task CopyTreeAsync(string name, string source, string targetRoot, CancellationToken ct)
+    {
+        var rootTarget = targetRoot; Directory.CreateDirectory(rootTarget);
         var stack = new Stack<(string Source, string Target)>(); stack.Push((source, rootTarget));
         while (stack.Count > 0)
         {
@@ -128,15 +243,56 @@ internal sealed class BackupEngine : IDisposable
     private string? MapPath(string path)
     {
         string full; try { full = Path.GetFullPath(path); } catch { return null; }
-        foreach (var (name, source) in Sources())
+        foreach (var (name, source, targetRoot) in ConfiguredSources())
         {
-            var prefix = Path.GetFullPath(source).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            var normalized = Path.GetFullPath(source).TrimEnd(Path.DirectorySeparatorChar);
+            if (string.Equals(full, normalized, StringComparison.OrdinalIgnoreCase)) return targetRoot;
+            var prefix = normalized + Path.DirectorySeparatorChar;
             if (!full.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) continue;
             var relative = Path.GetRelativePath(source, full);
             if (relative == ".." || relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal) || Path.IsPathRooted(relative)) return null;
-            return Path.Combine(config.Destination, name, relative);
+            return Path.Combine(targetRoot, relative);
         }
         return null;
+    }
+
+    private IEnumerable<(string Name, string Path, string TargetRoot)> ConfiguredSources()
+    {
+        // Only use defaults for a genuinely fresh configuration. If saved paths
+        // are missing, do not silently back up unrelated folders instead.
+        var configured = config.SelectedSources;
+        if (configured is not { Count: > 0 })
+        {
+            foreach (var (name, path) in Sources())
+                if (Directory.Exists(path)) yield return (name, path, Path.Combine(config.Destination, name));
+            yield break;
+        }
+
+        var selected = configured.Where(Directory.Exists).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (selected.Count == 0) yield break;
+
+        var roots = selected.Where(path => !selected.Any(other =>
+            !string.Equals(path, other, StringComparison.OrdinalIgnoreCase) &&
+            path.StartsWith(other.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)));
+
+        foreach (var path in roots)
+        {
+            var standard = Sources().FirstOrDefault(x =>
+                string.Equals(path, x.Path, StringComparison.OrdinalIgnoreCase) ||
+                path.StartsWith(x.Path.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrEmpty(standard.Path))
+            {
+                var relative = Path.GetRelativePath(standard.Path, path);
+                var target = relative == "." ? Path.Combine(config.Destination, standard.Name) : Path.Combine(config.Destination, standard.Name, relative);
+                yield return (standard.Name, path, target);
+            }
+            else
+            {
+                var drive = Path.GetPathRoot(path)?.TrimEnd(Path.DirectorySeparatorChar, ':') ?? "Root";
+                var relative = Path.GetRelativePath(Path.GetPathRoot(path) ?? path, path);
+                yield return ("Custom", path, Path.Combine(config.Destination, "Custom", drive, relative));
+            }
+        }
     }
 
     private async Task CopyFileAsync(string source, string target, CancellationToken ct)
@@ -183,7 +339,8 @@ internal sealed class BackupEngine : IDisposable
     public void Dispose()
     {
         if (Interlocked.Exchange(ref disposed, 1) != 0) return;
-        stop.Cancel(); foreach (var watcher in watchers) watcher.Dispose();
+        stop.Cancel();
+        lock (watchers) { foreach (var watcher in watchers) watcher.Dispose(); watchers.Clear(); }
         // Do not dispose semaphores here: an in-flight copy may still be unwinding after cancellation.
     }
 }

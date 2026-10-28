@@ -18,6 +18,24 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
+      - name: Generate branded Windows icon
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Drawing
+          $bitmap = New-Object System.Drawing.Bitmap 64,64
+          $g = [System.Drawing.Graphics]::FromImage($bitmap)
+          $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+          $g.Clear([System.Drawing.Color]::FromArgb(15,18,16))
+          $frame = New-Object System.Drawing.Pen ([System.Drawing.Color]::FromArgb(151,240,171)), 2
+          $g.DrawRectangle($frame,8,6,47,51)
+          $green = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(151,240,171))
+          $points = @([System.Drawing.Point]::new(18,18),[System.Drawing.Point]::new(45,18),[System.Drawing.Point]::new(45,24),[System.Drawing.Point]::new(25,24),[System.Drawing.Point]::new(25,30),[System.Drawing.Point]::new(40,30),[System.Drawing.Point]::new(40,36),[System.Drawing.Point]::new(25,36),[System.Drawing.Point]::new(25,42),[System.Drawing.Point]::new(45,42),[System.Drawing.Point]::new(45,48),[System.Drawing.Point]::new(18,48))
+          $g.FillPolygon($green,$points)
+          $handle = $bitmap.GetHicon()
+          $icon = [System.Drawing.Icon]::FromHandle($handle)
+          $stream = [System.IO.File]::Create("src/GermanOSBackup/app.ico")
+          $icon.Save($stream); $stream.Dispose()
+          $icon.Dispose(); $g.Dispose(); $bitmap.Dispose(); $frame.Dispose(); $green.Dispose()
       - name: Publish self-contained application
         run: dotnet publish .\src\GermanOSBackup\GermanOSBackup.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o .\publish
       - name: Install Inno Setup

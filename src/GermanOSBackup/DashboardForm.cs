@@ -31,9 +31,22 @@ internal sealed class DashboardForm : Form
         menu.Items.Add("Открыть German OS Backup", null, (_, _) => ShowWindow());
         menu.Items.Add("Открыть папку копий", null, (_, _) => OpenDestination());
         menu.Items.Add("Проверить сейчас", null, async (_, _) => await engine.RequestScanAsync());
+        menu.Items.Add("Остановить текущую проверку", null, (_, _) => engine.StopCurrentScan());
+        menu.Items.Add("Глубокая проверка (SHA-256)", null, async (_, _) =>
+        {
+            try
+            {
+                details.Text = "Глубокая проверка: сверяем содержимое файлов по SHA-256…";
+                var result = await engine.VerifyBackupAsync();
+                MessageBox.Show(this, $"Проверено файлов: {result.Checked:N0}\\nНет копии: {result.Missing:N0}\\nОтличается или ошибка: {result.Different:N0}", "Глубокая проверка", MessageBoxButtons.OK, result.Missing + result.Different == 0 ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+            }
+            catch (OperationCanceledException) { details.Text = "Глубокая проверка остановлена."; }
+            catch (Exception ex) { MessageBox.Show(this, ex.Message, "Ошибка проверки", MessageBoxButtons.OK, MessageBoxIcon.Error); }
+        });
+        menu.Items.Add("Восстановить из копии…", null, (_, _) => { using var form = new RestoreForm(config.Destination); form.ShowDialog(this); });
         menu.Items.Add("Открыть журнал", null, (_, _) => OpenFile(Program.LogPath));
         menu.Items.Add(new ToolStripSeparator()); menu.Items.Add("Выход", null, (_, _) => { allowClose = true; Close(); });
-        tray = new NotifyIcon { Text = "German OS Backup", Icon = SystemIcons.Shield, ContextMenuStrip = menu, Visible = true };
+        tray = new NotifyIcon { Text = "German OS Backup", Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? SystemIcons.Shield, ContextMenuStrip = menu, Visible = true };
         tray.DoubleClick += (_, _) => ShowWindow();
         BuildUi();
         Shown += async (_, _) =>
@@ -57,6 +70,8 @@ internal sealed class DashboardForm : Form
         var sub = Palette.Label("Состояние защиты файлов и активность копирования.", 10, Palette.Muted); sub.SetBounds(32, 141, 650, 23); Controls.Add(sub);
         var statusPanel = new Panel { BackColor = Palette.Panel, BorderStyle = BorderStyle.FixedSingle }; statusPanel.SetBounds(30, 183, 840, 142); statusPanel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right; Controls.Add(statusPanel);
         status.SetBounds(22, 16, 600, 24); statusPanel.Controls.Add(status); headline.SetBounds(22, 44, 790, 36); statusPanel.Controls.Add(headline); details.SetBounds(22, 87, 790, 30); statusPanel.Controls.Add(details);
+        var stopButton = Palette.Button("Остановить", false); stopButton.SetBounds(650, 12, 160, 34); stopButton.Anchor = AnchorStyles.Top | AnchorStyles.Right; statusPanel.Controls.Add(stopButton);
+        stopButton.Click += (_, _) => { engine.StopCurrentScan(); details.Text = "Останавливаем текущую операцию… Уже сохранённые файлы останутся на месте."; };
         var stats = new TableLayoutPanel { ColumnCount = 4, RowCount = 1, BackColor = Palette.Background }; stats.SetBounds(30, 346, 840, 112); stats.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
         for (int i = 0; i < 4; i++) stats.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25)); Controls.Add(stats);
         AddStat(stats, 0, "СКОПИРОВАНО", copied, "объём файлов"); AddStat(stats, 1, "ФАЙЛЫ", files, "сохранено файлов"); AddStat(stats, 2, "ОШИБКИ", errors, "подробности в журнале"); AddStat(stats, 3, "СКОРОСТЬ", speed, "текущая скорость");
@@ -65,6 +80,17 @@ internal sealed class DashboardForm : Form
         progress.SetBounds(17, 42, 802, 10); progress.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right; progressPanel.Controls.Add(progress);
         var destTitle = Palette.Label("МЕСТО РЕЗЕРВНОЙ КОПИИ", 9, Palette.Green, true); destTitle.SetBounds(32, 590, 300, 20); Controls.Add(destTitle);
         var destination = Palette.Label(config.Destination, 10, Palette.Muted); destination.SetBounds(32, 614, 590, 25); destination.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right; Controls.Add(destination);
+        var settings = Palette.Button("Источники…", false); settings.SetBounds(515, 601, 165, 40); settings.Anchor = AnchorStyles.Top | AnchorStyles.Right; Controls.Add(settings);
+        settings.Click += async (_, _) =>
+        {
+            using var form = new SourcesForm(config);
+            if (form.ShowDialog(this) == DialogResult.OK)
+            {
+                engine.RefreshWatchers();
+                details.Text = "Источники обновлены. Проверяем выбранные папки…";
+                await engine.RequestScanAsync();
+            }
+        };
         var open = Palette.Button("Открыть папку", false); open.SetBounds(700, 601, 170, 40); open.Anchor = AnchorStyles.Top | AnchorStyles.Right; Controls.Add(open); open.Click += (_, _) => OpenDestination();
         var note = Palette.Label("Окно можно закрыть — резервное копирование останется в трее.", 9, Palette.Muted); note.SetBounds(32, 650, 800, 20); Controls.Add(note);
     }
