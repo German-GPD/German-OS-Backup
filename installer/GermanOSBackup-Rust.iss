@@ -1,6 +1,6 @@
 #define AppName "German OS Backup Rust Edition"
 #ifndef AppVersion
-  #define AppVersion "1.2.0"
+  #define AppVersion "1.3.0"
 #endif
 #define AppPublisher "German-GPD"
 #define AppExeName "GermanOSBackup-Rust.exe"
