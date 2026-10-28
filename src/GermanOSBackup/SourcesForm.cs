@@ -18,13 +18,15 @@ internal sealed class SourcesForm : Form
         var host = new Panel { Dock = DockStyle.Fill, BackColor = Palette.Panel, Padding = new Padding(10) }; tree.BackColor = Palette.Panel; tree.ForeColor = Palette.Text; tree.ShowNodeToolTips = true; host.Controls.Add(tree);
         var tips = new ToolTip { AutoPopDelay = 10000, InitialDelay = 350, ReshowDelay = 150, ShowAlways = true };
         var bottom = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, WrapContents = false };
-        var save = Palette.Button("Сохранить выбор", true); save.Width = 150; var cancel = Palette.Button("Отмена", false); cancel.Width = 100; var add = Palette.Button("Добавить папку…", false); add.Width = 145;
-        bottom.Controls.Add(save); bottom.Controls.Add(cancel); bottom.Controls.Add(add); layout.Controls.Add(header, 0, 0); layout.Controls.Add(host, 0, 1); layout.Controls.Add(bottom, 0, 2); Controls.Add(layout);
+        var save = Palette.Button("Сохранить выбор", true); save.Width = 150; var cancel = Palette.Button("Отмена", false); cancel.Width = 100; var add = Palette.Button("Добавить папку…", false); add.Width = 145; var clear = Palette.Button("Снять все", false); clear.Width = 95;
+        bottom.Controls.Add(save); bottom.Controls.Add(cancel); bottom.Controls.Add(add); bottom.Controls.Add(clear); layout.Controls.Add(header, 0, 0); layout.Controls.Add(host, 0, 1); layout.Controls.Add(bottom, 0, 2); Controls.Add(layout);
         tips.SetToolTip(tree, "Отметь папки, содержимое которых нужно сохранять.");
         tips.SetToolTip(add, "Добавить папку, которой нет в списке стандартных источников.");
+        tips.SetToolTip(clear, "Снять выделение со всех папок, чтобы начать выбор заново.");
         tips.SetToolTip(save, "Сохранить выбранные папки и вернуться в главное окно.");
         tips.SetToolTip(cancel, "Отменить изменения и оставить прежний выбор.");
         BuildTree(); tree.BeforeExpand += (_, e) => LoadChildren(e.Node!); tree.AfterCheck += (_, e) => { if (!loading) SetChildren(e.Node!, e.Node!.Checked); };
+        clear.Click += (_, _) => { loading = true; foreach (TreeNode node in tree.Nodes) { node.Checked = false; SetChildren(node, false); } loading = false; };
         add.Click += (_, _) => { using var d = new FolderBrowserDialog { Description = "Выбери папку для резервного копирования", ShowNewFolderButton = false }; if (d.ShowDialog(this) == DialogResult.OK && Directory.Exists(d.SelectedPath)) AddPath(d.SelectedPath, true); };
         save.Click += (_, _) =>
         {
