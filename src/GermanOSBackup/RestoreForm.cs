@@ -89,7 +89,7 @@ internal sealed class RestoreForm : Form
                             finally { try { if (File.Exists(temp)) File.Delete(temp); } catch { } }
                         }
                     }
-                    catch (Exception ex) { Interlocked.Increment(ref errors); Program.Log($"Ошибка восстановления {file}: {ex.Message}"); }
+                    catch (Exception ex) { Interlocked.Increment(ref errors); File.AppendAllText(Program.LogPath, $"[{DateTime.Now:O}] RESTORE {file}: {ex}{Environment.NewLine}"); }
                     done++;
                     if (done % 20 == 0 || done == total) BeginInvoke(() => progress.Value = Math.Min(100, (int)(done * 100L / total)));
                 }
