@@ -1,1 +1,2 @@
 document.documentElement.classList.add("ready");
+(async()=>{try{const r=await fetch("./version.json",{cache:"no-store"});if(!r.ok)return;const v=await r.json();const version=String(v.version||"1.2.0");for(const id of ["currentVersion","metaVersion","footerVersion"]){const el=document.getElementById(id);if(el)el.textContent=id==="currentVersion"?"VERSION "+version:id==="metaVersion"?"Версия "+version:"v"+version}}catch{}})();
