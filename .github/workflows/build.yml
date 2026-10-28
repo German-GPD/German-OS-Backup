@@ -69,6 +69,19 @@ jobs:
           if (!(Test-Path $rust)) { throw "Rust installer missing: $rust" }
           if (!(Test-Path $cs)) { throw "C# installer missing: $cs" }
           Write-Host "Both installers exist. Release may proceed."
+      - name: Generate SHA-256 checksums
+        if: github.ref == 'refs/heads/main'
+        shell: pwsh
+        run: |
+          $files = @(
+            ".\\rust-source\\installer\\output\\GermanOSBackup-Rust-Setup-x64.exe",
+            ".\\cs-source\\installer\\output\\GermanOSBackup-CS-Setup-x64.exe"
+          )
+          $lines = foreach ($file in $files) {
+            $hash = (Get-FileHash -Algorithm SHA256 $file).Hash.ToLowerInvariant()
+            "$hash  $([System.IO.Path]::GetFileName($file))"
+          }
+          Set-Content -Path ".\\SHA256SUMS.txt" -Value $lines -Encoding utf8
       - name: Publish both installers
         if: github.ref == 'refs/heads/main' && startsWith(github.event.head_commit.message, 'Release:')
         uses: softprops/action-gh-release@v2
@@ -81,9 +94,12 @@ jobs:
             - GermanOSBackup-Rust-Setup-x64.exe — нативная Rust Edition.
             - GermanOSBackup-CS-Setup-x64.exe — C# Edition с WebView2.
             Настройки и резервные копии хранятся отдельно от файлов программы.
+            SHA256SUMS.txt содержит SHA-256-хэши обоих установщиков для проверки целостности.
+            Установщики не подписаны сертификатом Authenticode; Windows SmartScreen может показать предупреждение.
           files: |
             rust-source/installer/output/GermanOSBackup-Rust-Setup-x64.exe
             cs-source/installer/output/GermanOSBackup-CS-Setup-x64.exe
+            SHA256SUMS.txt
           overwrite_files: true
           make_latest: true
           fail_on_unmatched_files: true
