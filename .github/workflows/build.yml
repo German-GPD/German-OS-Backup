@@ -52,12 +52,13 @@ jobs:
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.0
+          tag_name: v1.1.0
           target_commitish: main
-          name: German OS Backup — Windows x64
+          name: German OS Backup 1.1.0 — Windows x64
           body: |
-            Установщик German OS Backup для Windows x64.
-            Скачайте GermanOSBackup-Setup-x64.exe и запустите. Установщик добавит автозапуск; при первом старте приложение предупредит о нагрузке и попросит выбрать папку копии.
+            Установщик German OS Backup 1.1.0 для Windows x64.
+            Запустите GermanOSBackup-Setup-x64.exe поверх предыдущей версии. Установщик обновляет файлы программы, а пользовательские настройки и папки резервных копий хранятся отдельно.
+            При первом запуске мастер попросит выбрать место копии, источники и параметр автозапуска.
             Программа не подписана цифровым сертификатом, поэтому SmartScreen может предупредить о неизвестном издателе.
           files: installer/output/GermanOSBackup-Setup-x64.exe
           overwrite_files: true
