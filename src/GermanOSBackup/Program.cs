@@ -120,6 +120,7 @@ internal static class Program
 internal sealed class AppConfig
 {
     public string Destination { get; set; } = "";
+    public string PerformanceMode { get; set; } = "balanced";
     public bool FirstRunComplete { get; set; }
     public bool? StartWithWindows { get; set; }
     public List<string> SelectedSources { get; set; } = new();
