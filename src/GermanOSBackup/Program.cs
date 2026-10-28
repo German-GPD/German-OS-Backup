@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using Microsoft.Win32;
 
 namespace GermanOSBackup;
 
@@ -28,6 +29,7 @@ internal static class Program
                 {
                     Destination = Path.GetFullPath(setup.Destination),
                     FirstRunComplete = true,
+                    StartWithWindows = setup.StartWithWindows,
                     SelectedSources = BackupEngine.Sources().Where(x => Directory.Exists(x.Path)).Select(x => x.Path).ToList()
                 };
                 SaveConfig(config);
@@ -48,6 +50,8 @@ internal static class Program
                 config.SelectedSources = BackupEngine.Sources().Where(x => Directory.Exists(x.Path)).Select(x => x.Path).ToList();
                 SaveConfig(config);
             }
+
+            if (config.StartWithWindows.HasValue) ConfigureStartup(config.StartWithWindows.Value);
 
             var background = args.Contains("--background", StringComparer.OrdinalIgnoreCase);
             try { Process.GetCurrentProcess().PriorityClass = background ? ProcessPriorityClass.BelowNormal : (args.Contains("--first-run", StringComparer.OrdinalIgnoreCase) ? ProcessPriorityClass.AboveNormal : ProcessPriorityClass.Normal); } catch { }
@@ -73,6 +77,16 @@ internal static class Program
         var temp = ConfigPath + ".tmp";
         File.WriteAllText(temp, JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true }));
         File.Move(temp, ConfigPath, true);
+    }
+
+    internal static void ConfigureStartup(bool enabled)
+    {
+        using var key = Registry.CurrentUser.OpenSubKey(@"Software\\Microsoft\\Windows\\CurrentVersion\\Run", writable: true)
+            ?? Registry.CurrentUser.CreateSubKey(@"Software\\Microsoft\\Windows\\CurrentVersion\\Run", writable: true);
+        if (enabled)
+            key.SetValue("GermanOSBackup", $"\\"{Application.ExecutablePath}\\" --background");
+        else
+            key.DeleteValue("GermanOSBackup", throwOnMissingValue: false);
     }
 
     internal static void ValidateDestination(string path)
@@ -106,5 +120,6 @@ internal sealed class AppConfig
 {
     public string Destination { get; set; } = "";
     public bool FirstRunComplete { get; set; }
+    public bool? StartWithWindows { get; set; }
     public List<string> SelectedSources { get; set; } = new();
 }
