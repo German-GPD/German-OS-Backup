@@ -1,5 +1,5 @@
 #define AppName "German OS Backup"
-#define AppVersion "1.0.0"
+#define AppVersion "1.1.0"
 #define AppPublisher "German-GPD"
 #define AppExeName "GermanOSBackup.exe"
 
@@ -31,9 +31,6 @@ Name: "{autodesktop}\German OS Backup"; Filename: "{app}\{#AppExeName}"; Tasks: 
 
 [Tasks]
 Name: "desktopicon"; Description: "Создать ярлык на рабочем столе"; GroupDescription: "Дополнительные ярлыки:"; Flags: unchecked
-
-[Registry]
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "GermanOSBackup"; ValueData: """{app}\{#AppExeName}"" --background"; Flags: uninsdeletevalue
 
 [Run]
 Filename: "{app}\{#AppExeName}"; Parameters: "--first-run"; Description: "Запустить German OS Backup"; Flags: postinstall nowait skipifsilent runasoriginaluser
