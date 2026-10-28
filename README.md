@@ -2,9 +2,9 @@
 
 **Фоновая резервная копия Windows без рекламы, аккаунтов и телеметрии.**
 
-[Скачать для Windows x64](https://github.com/German-GPD/German-OS-Backup/releases/latest/download/GermanOSBackup-win-x64.zip) · [Все релизы](https://github.com/German-GPD/German-OS-Backup/releases) · [Сайт проекта](https://german-gpd.github.io/German-OS-Backup/)
+[Скачать для Windows x64](https://github.com/German-GPD/German-OS-Backup/actions/runs/40720056439) · [Все релизы](https://github.com/German-GPD/German-OS-Backup/actions/runs/40720056439) · [Сайт проекта](https://german-gpd.github.io/German-OS-Backup/)
 
-> Прямая ссылка на ZIP заработает после публикации первого релиза. До этого можно скачать сборку из раздела **Actions → последний успешный запуск → Artifacts**.
+> Сборка уже готова. Открой [успешный запуск GitHub Actions](https://github.com/German-GPD/German-OS-Backup/actions/runs/40720056439), прокрути до **Artifacts** и скачай `GermanOSBackup-win-x64`. Внутри ZIP находится `GermanOSBackup.exe`.
 
 ## Что делает
 
@@ -18,7 +18,7 @@
 
 ## Installation
 
-1. Скачай ZIP по ссылке **[GermanOSBackup-win-x64.zip](https://github.com/German-GPD/German-OS-Backup/releases/latest/download/GermanOSBackup-win-x64.zip)** и распакуй его.
+1. Открой [страницу готовой сборки](https://github.com/German-GPD/German-OS-Backup/actions/runs/40720056439), найди внизу раздел **Artifacts**, скачай `GermanOSBackup-win-x64` и распакуй ZIP.
 2. Запусти `GermanOSBackup.exe`. При первом запуске Windows может показать предупреждение SmartScreen: приложение пока не подписано цифровым сертификатом.
 3. Выбери папку на другом диске, например `D:\OS-Backup` или `F:\OS`. Системный диск для назначения запрещён.
 4. Программа скопирует себя в папку пользователя, зарегистрирует запуск с Windows и начнёт резервное копирование. Значок щита появится в системном трее.
