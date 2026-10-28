@@ -8,9 +8,9 @@
     <AssemblyName>GermanOSBackup</AssemblyName>
     <RootNamespace>GermanOSBackup</RootNamespace>
     <ApplicationIcon>app.ico</ApplicationIcon>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <Authors>German-GPD</Authors>
-    <Description>Local Windows backup with a modern web-based desktop dashboard.</Description>
+    <Description>German OS Backup 1.2.0 — local Windows backup with system usage, source status and in-app update checks.</Description>
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
   <ItemGroup>
