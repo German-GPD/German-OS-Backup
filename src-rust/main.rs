@@ -212,7 +212,7 @@ impl eframe::App for BackupApp {
                 ui.label(RichText::new("G_").size(25.0).strong().color(green));
                 ui.vertical(|ui| {
                     ui.label(RichText::new("GERMAN OS BACKUP").size(17.0).strong().color(Color32::WHITE));
-                    ui.label(RichText::new(format!("ЛОКАЛЬНОЕ РЕЗЕРВНОЕ КОПИРОВАНИЕ · v{VERSION}").size(10.0).color(muted));
+                    ui.label(RichText::new(format!("ЛОКАЛЬНОЕ РЕЗЕРВНОЕ КОПИРОВАНИЕ · v{VERSION}")).size(10.0).color(muted));
                 });
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui.button("Открыть релизы ↗").clicked() { ctx.open_url(egui::OpenUrl::new_tab(RELEASES)); }
