@@ -38,8 +38,9 @@ internal static class Program
                 {
                     if (sources.ShowDialog() != DialogResult.OK)
                     {
-                        config.SelectedSources = BackupEngine.Sources().Where(x => Directory.Exists(x.Path)).Select(x => x.Path).ToList();
-                        SaveConfig(config);
+                        File.Delete(ConfigPath);
+                        MessageBox.Show("Настройка не завершена. При следующем запуске мастер откроется снова.", "German OS Backup", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        return;
                     }
                 }
             }
