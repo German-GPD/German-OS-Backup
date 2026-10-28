@@ -31,7 +31,7 @@ internal sealed class SourcesForm : Form
             var selected = GetSelectedRoots().Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             if (selected.Count == 0)
             {
-                MessageBox.Show(this, "Выбери хотя бы одну папку для резервного копирования.", "German OS Backup", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, "Выбери хотя бы одну папку для резервного копирования.", "German OS Backup C# Edition", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -59,7 +59,7 @@ internal sealed class SourcesForm : Form
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, $"Не удалось сохранить выбор папок: {ex.Message}", "German OS Backup", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(this, $"Не удалось сохранить выбор папок: {ex.Message}", "German OS Backup C# Edition", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         };
         cancel.Click += (_, _) => { DialogResult = DialogResult.Cancel; Close(); };
