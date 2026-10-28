@@ -65,6 +65,16 @@ internal sealed class DashboardForm : Form
         progress.SetBounds(17, 42, 802, 10); progress.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right; progressPanel.Controls.Add(progress);
         var destTitle = Palette.Label("МЕСТО РЕЗЕРВНОЙ КОПИИ", 9, Palette.Green, true); destTitle.SetBounds(32, 590, 300, 20); Controls.Add(destTitle);
         var destination = Palette.Label(config.Destination, 10, Palette.Muted); destination.SetBounds(32, 614, 590, 25); destination.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right; Controls.Add(destination);
+        var settings = Palette.Button("Источники…", false); settings.SetBounds(515, 601, 165, 40); settings.Anchor = AnchorStyles.Top | AnchorStyles.Right; Controls.Add(settings);
+        settings.Click += async (_, _) =>
+        {
+            using var form = new SourcesForm(config);
+            if (form.ShowDialog(this) == DialogResult.OK)
+            {
+                await engine.RequestScanAsync();
+                details.Text = "Выбор папок сохранён. Новые источники начнут отслеживаться после перезапуска приложения.";
+            }
+        };
         var open = Palette.Button("Открыть папку", false); open.SetBounds(700, 601, 170, 40); open.Anchor = AnchorStyles.Top | AnchorStyles.Right; Controls.Add(open); open.Click += (_, _) => OpenDestination();
         var note = Palette.Label("Окно можно закрыть — резервное копирование останется в трее.", 9, Palette.Muted); note.SetBounds(32, 650, 800, 20); Controls.Add(note);
     }
