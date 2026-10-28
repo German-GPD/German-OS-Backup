@@ -1,4 +1,4 @@
-name: Build Rust and C# editions
+name: Build both editions from rust + cs branches
 on:
   push:
     branches: [main]
