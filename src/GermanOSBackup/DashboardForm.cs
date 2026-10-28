@@ -33,7 +33,7 @@ internal sealed class DashboardForm : Form
         menu.Items.Add("Проверить сейчас", null, async (_, _) => await engine.RequestScanAsync());
         menu.Items.Add("Открыть журнал", null, (_, _) => OpenFile(Program.LogPath));
         menu.Items.Add(new ToolStripSeparator()); menu.Items.Add("Выход", null, (_, _) => { allowClose = true; Close(); });
-        tray = new NotifyIcon { Text = "German OS Backup", Icon = SystemIcons.Shield, ContextMenuStrip = menu, Visible = true };
+        tray = new NotifyIcon { Text = "German OS Backup", Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? SystemIcons.Shield, ContextMenuStrip = menu, Visible = true };
         tray.DoubleClick += (_, _) => ShowWindow();
         BuildUi();
         Shown += async (_, _) =>
