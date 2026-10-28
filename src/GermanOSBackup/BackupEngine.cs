@@ -51,24 +51,38 @@ internal sealed class BackupEngine : IDisposable
 
     public async Task RequestScanAsync()
     {
-        if (Volatile.Read(ref disposed) != 0 || !await scanLock.WaitAsync(0)) return;
-        stats.IsScanning = true; var startedAt = DateTime.UtcNow;
-        try
+        // Directory enumeration can block on slow, sleeping or unhealthy drives.
+        // Keep every filesystem walk off the WinForms UI thread.
+        if (Volatile.Read(ref disposed) != 0 || !await scanLock.WaitAsync(0).ConfigureAwait(false)) return;
+
+        await Task.Run(async () =>
         {
-            foreach (var (name, source) in Sources())
+            stats.IsScanning = true;
+            var startedAt = DateTime.UtcNow;
+            try
             {
-                if (stop.IsCancellationRequested) break;
-                if (Directory.Exists(source)) await CopyTreeAsync(name, source, stop.Token);
+                foreach (var (name, source) in Sources())
+                {
+                    stop.Token.ThrowIfCancellationRequested();
+                    if (Directory.Exists(source)) await CopyTreeAsync(name, source, stop.Token).ConfigureAwait(false);
+                }
+
+                if (!stop.IsCancellationRequested) stats.HasCompletedInitialScan = true;
             }
-            if (!stop.IsCancellationRequested) stats.HasCompletedInitialScan = true;
-        }
-        catch (OperationCanceledException) { }
-        catch (Exception ex) { Interlocked.Increment(ref stats.Errors); Log($"Ошибка сканирования: {ex}"); }
-        finally
-        {
-            stats.IsScanning = false; stats.LastScanFinished = DateTime.Now; scanLock.Release();
-            Log($"Сканирование завершено за {(DateTime.UtcNow - startedAt).TotalMinutes:0.0} мин. Всего скопировано файлов: {Interlocked.Read(ref stats.FilesCopied):N0}.");
-        }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                Interlocked.Increment(ref stats.Errors);
+                Log($"Ошибка сканирования: {ex}");
+            }
+            finally
+            {
+                stats.IsScanning = false;
+                stats.LastScanFinished = DateTime.Now;
+                scanLock.Release();
+                Log($"Сканирование завершено за {(DateTime.UtcNow - startedAt).TotalMinutes:0.0} мин. Всего скопировано файлов: {Interlocked.Read(ref stats.FilesCopied):N0}.");
+            }
+        }).ConfigureAwait(false);
     }
 
     private async Task CopyTreeAsync(string name, string source, CancellationToken ct)
