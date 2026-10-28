@@ -82,6 +82,7 @@ internal sealed class BackupEngine : IDisposable
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(stop.Token, cancellationToken);
         var ct = linked.Token;
         await scanLock.WaitAsync(ct).ConfigureAwait(false);
+        lock (scanCancellationLock) activeScan = linked;
         long checkedFiles = 0, missing = 0, different = 0;
         try
         {
@@ -104,7 +105,7 @@ internal sealed class BackupEngine : IDisposable
                         try
                         {
                             if ((File.GetAttributes(dir) & FileAttributes.ReparsePoint) == 0)
-                                stack.Push((dir, Path.Combine(to, Path.GetFileName(dir)));
+                                stack.Push((dir, Path.Combine(to, Path.GetFileName(dir))));
                         }
                         catch (Exception ex) { Interlocked.Increment(ref stats.Errors); Log($"Глубокая проверка папки {dir}: {ex.Message}"); }
                     }
@@ -138,6 +139,7 @@ internal sealed class BackupEngine : IDisposable
         {
             stats.IsScanning = false;
             stats.LastScanFinished = DateTime.Now;
+            lock (scanCancellationLock) { if (ReferenceEquals(activeScan, linked)) activeScan = null; }
             scanLock.Release();
         }
     }
