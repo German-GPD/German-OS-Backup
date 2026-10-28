@@ -11,12 +11,18 @@ internal sealed class SourcesForm : Form
         this.config = config; Text = "Источники резервного копирования"; StartPosition = FormStartPosition.CenterParent;
         Size = new Size(720, 600); MinimumSize = new Size(560, 420); BackColor = Palette.Background; ForeColor = Palette.Text; Font = Palette.Font;
         var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, Padding = new Padding(18), BackColor = Palette.Background };
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 48)); layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
-        var title = Palette.Label("Выбери, что сохранять", 20, Palette.Text, true); title.Dock = DockStyle.Fill;
-        var host = new Panel { Dock = DockStyle.Fill, BackColor = Palette.Panel, Padding = new Padding(10) }; tree.BackColor = Palette.Panel; tree.ForeColor = Palette.Text; host.Controls.Add(tree);
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 76)); layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
+        var header = new Panel { Dock = DockStyle.Fill, BackColor = Palette.Background };
+        var title = Palette.Label("Выбери папки для копирования", 19, Palette.Text, true); title.SetBounds(0, 0, 650, 31); header.Controls.Add(title);
+        var subtitle = Palette.Label("Отметь папки галочками. Можно выбрать весь раздел или добавить любую папку вручную.", 10, Palette.Muted); subtitle.SetBounds(1, 35, 650, 26); header.Controls.Add(subtitle);
+        var host = new Panel { Dock = DockStyle.Fill, BackColor = Palette.Panel, Padding = new Padding(10) }; tree.BackColor = Palette.Panel; tree.ForeColor = Palette.Text; tree.ShowNodeToolTips = true; tree.ToolTipText = "Отметь папки, содержимое которых нужно сохранять."; host.Controls.Add(tree);
+        var tips = new ToolTip { AutoPopDelay = 10000, InitialDelay = 350, ReshowDelay = 150, ShowAlways = true };
         var bottom = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, WrapContents = false };
         var save = Palette.Button("Сохранить выбор", true); save.Width = 150; var cancel = Palette.Button("Отмена", false); cancel.Width = 100; var add = Palette.Button("Добавить папку…", false); add.Width = 145;
-        bottom.Controls.Add(save); bottom.Controls.Add(cancel); bottom.Controls.Add(add); layout.Controls.Add(title, 0, 0); layout.Controls.Add(host, 0, 1); layout.Controls.Add(bottom, 0, 2); Controls.Add(layout);
+        bottom.Controls.Add(save); bottom.Controls.Add(cancel); bottom.Controls.Add(add); layout.Controls.Add(header, 0, 0); layout.Controls.Add(host, 0, 1); layout.Controls.Add(bottom, 0, 2); Controls.Add(layout);
+        tips.SetToolTip(add, "Добавить папку, которой нет в списке стандартных источников.");
+        tips.SetToolTip(save, "Сохранить выбранные папки и вернуться в главное окно.");
+        tips.SetToolTip(cancel, "Отменить изменения и оставить прежний выбор.");
         BuildTree(); tree.BeforeExpand += (_, e) => LoadChildren(e.Node!); tree.AfterCheck += (_, e) => { if (!loading) SetChildren(e.Node!, e.Node!.Checked); };
         add.Click += (_, _) => { using var d = new FolderBrowserDialog { Description = "Выбери папку для резервного копирования", ShowNewFolderButton = false }; if (d.ShowDialog(this) == DialogResult.OK && Directory.Exists(d.SelectedPath)) AddPath(d.SelectedPath, true); };
         save.Click += (_, _) =>
@@ -68,12 +74,12 @@ internal sealed class SourcesForm : Form
     {
         var root = Path.GetPathRoot(path) ?? path; var parts = path.Substring(Math.Min(root.Length, path.Length)).Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
         TreeNode? parent = null; string current = root;
-        if (parts.Length == 0) { var node = new TreeNode(path) { Tag = path, Checked = checkedState }; node.Nodes.Add(new TreeNode("…")); tree.Nodes.Add(node); return; }
+        if (parts.Length == 0) { var node = new TreeNode(path) { Tag = path, Checked = checkedState, ToolTipText = "Сохранять файлы из этой папки" }; node.Nodes.Add(new TreeNode("…")); tree.Nodes.Add(node); return; }
         foreach (var part in parts)
         {
             current = Path.Combine(current, part);
             var node = (parent == null ? tree.Nodes : parent.Nodes).Cast<TreeNode>().FirstOrDefault(n => string.Equals(n.Tag?.ToString(), current, StringComparison.OrdinalIgnoreCase));
-            if (node == null) { node = new TreeNode(part) { Tag = current }; try { if (Directory.GetDirectories(current).Length > 0) node.Nodes.Add(new TreeNode("…")); } catch { } if (parent == null) tree.Nodes.Add(node); else parent.Nodes.Add(node); }
+            if (node == null) { node = new TreeNode(part) { Tag = current, ToolTipText = current }; try { if (Directory.GetDirectories(current).Length > 0) node.Nodes.Add(new TreeNode("…")); } catch { } if (parent == null) tree.Nodes.Add(node); else parent.Nodes.Add(node); }
             parent = node;
         }
         if (parent != null) { parent.Checked = checkedState; parent.Expand(); }
@@ -81,7 +87,7 @@ internal sealed class SourcesForm : Form
     private void LoadChildren(TreeNode node)
     {
         var path = node.Tag?.ToString(); if (path == null || (node.Nodes.Count == 1 && node.Nodes[0].Text != "…")) return;
-        node.Nodes.Clear(); try { foreach (var dir in Directory.GetDirectories(path).OrderBy(x => x, StringComparer.OrdinalIgnoreCase)) { var child = new TreeNode(Path.GetFileName(dir)) { Tag = dir }; try { if (Directory.GetDirectories(dir).Length > 0) child.Nodes.Add(new TreeNode("…")); } catch { } node.Nodes.Add(child); } } catch { }
+        node.Nodes.Clear(); try { foreach (var dir in Directory.GetDirectories(path).OrderBy(x => x, StringComparer.OrdinalIgnoreCase)) { var child = new TreeNode(Path.GetFileName(dir)) { Tag = dir, ToolTipText = dir }; try { if (Directory.GetDirectories(dir).Length > 0) child.Nodes.Add(new TreeNode("…")); } catch { } node.Nodes.Add(child); } } catch { }
         loading = true; foreach (TreeNode child in node.Nodes) child.Checked = config.SelectedSources?.Any(s => string.Equals(s, child.Tag?.ToString(), StringComparison.OrdinalIgnoreCase) || IsSameOrChild(s, child.Tag?.ToString() ?? "")) == true; loading = false;
     }
     private void SetChildren(TreeNode node, bool value) { loading = true; foreach (TreeNode child in node.Nodes) { if (child.Text == "…") continue; child.Checked = value; SetChildren(child, value); } loading = false; }
