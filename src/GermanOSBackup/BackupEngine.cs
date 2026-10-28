@@ -34,7 +34,7 @@ internal sealed class BackupEngine : IDisposable
     {
         if (Interlocked.Exchange(ref started, 1) != 0) return;
         Directory.CreateDirectory(config.Destination);
-        foreach (var (_, source) in Sources())
+        foreach (var (_, source, _) in ConfiguredSources())
         {
             if (!Directory.Exists(source)) continue;
             try
@@ -61,10 +61,10 @@ internal sealed class BackupEngine : IDisposable
             var startedAt = DateTime.UtcNow;
             try
             {
-                foreach (var (name, source) in Sources())
+                foreach (var (name, source, targetRoot) in ConfiguredSources())
                 {
                     stop.Token.ThrowIfCancellationRequested();
-                    if (Directory.Exists(source)) await CopyTreeAsync(name, source, stop.Token).ConfigureAwait(false);
+                    if (Directory.Exists(source)) await CopyTreeAsync(name, source, targetRoot, stop.Token).ConfigureAwait(false);
                 }
 
                 if (!stop.IsCancellationRequested) stats.HasCompletedInitialScan = true;
@@ -85,9 +85,9 @@ internal sealed class BackupEngine : IDisposable
         }).ConfigureAwait(false);
     }
 
-    private async Task CopyTreeAsync(string name, string source, CancellationToken ct)
+    private async Task CopyTreeAsync(string name, string source, string targetRoot, CancellationToken ct)
     {
-        var rootTarget = Path.Combine(config.Destination, name); Directory.CreateDirectory(rootTarget);
+        var rootTarget = targetRoot; Directory.CreateDirectory(rootTarget);
         var stack = new Stack<(string Source, string Target)>(); stack.Push((source, rootTarget));
         while (stack.Count > 0)
         {
@@ -142,15 +142,51 @@ internal sealed class BackupEngine : IDisposable
     private string? MapPath(string path)
     {
         string full; try { full = Path.GetFullPath(path); } catch { return null; }
-        foreach (var (name, source) in Sources())
+        foreach (var (name, source, targetRoot) in ConfiguredSources())
         {
-            var prefix = Path.GetFullPath(source).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            var normalized = Path.GetFullPath(source).TrimEnd(Path.DirectorySeparatorChar);
+            if (string.Equals(full, normalized, StringComparison.OrdinalIgnoreCase)) return targetRoot;
+            var prefix = normalized + Path.DirectorySeparatorChar;
             if (!full.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) continue;
             var relative = Path.GetRelativePath(source, full);
             if (relative == ".." || relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal) || Path.IsPathRooted(relative)) return null;
-            return Path.Combine(config.Destination, name, relative);
+            return Path.Combine(targetRoot, relative);
         }
         return null;
+    }
+
+    private IEnumerable<(string Name, string Path, string TargetRoot)> ConfiguredSources()
+    {
+        var selected = config.SelectedSources?.Where(Directory.Exists).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (selected is not { Count: > 0 })
+        {
+            foreach (var (name, path) in Sources())
+                if (Directory.Exists(path)) yield return (name, path, Path.Combine(config.Destination, name));
+            yield break;
+        }
+
+        var roots = selected.Where(path => !selected.Any(other =>
+            !string.Equals(path, other, StringComparison.OrdinalIgnoreCase) &&
+            path.StartsWith(other.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)));
+
+        foreach (var path in roots)
+        {
+            var standard = Sources().FirstOrDefault(x =>
+                string.Equals(path, x.Path, StringComparison.OrdinalIgnoreCase) ||
+                path.StartsWith(x.Path.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrEmpty(standard.Path))
+            {
+                var relative = Path.GetRelativePath(standard.Path, path);
+                var target = relative == "." ? Path.Combine(config.Destination, standard.Name) : Path.Combine(config.Destination, standard.Name, relative);
+                yield return (standard.Name, path, target);
+            }
+            else
+            {
+                var drive = Path.GetPathRoot(path)?.TrimEnd(Path.DirectorySeparatorChar, ':') ?? "Root";
+                var relative = Path.GetRelativePath(Path.GetPathRoot(path) ?? path, path);
+                yield return ("Custom", path, Path.Combine(config.Destination, "Custom", drive, relative));
+            }
+        }
     }
 
     private async Task CopyFileAsync(string source, string target, CancellationToken ct)
