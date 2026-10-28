@@ -5,12 +5,12 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <AssemblyName>GermanOSBackup</AssemblyName>
+    <AssemblyName>GermanOSBackup-CS</AssemblyName>
     <RootNamespace>GermanOSBackup</RootNamespace>
     <ApplicationIcon>app.ico</ApplicationIcon>
     <Version>1.2.0</Version>
     <Authors>German-GPD</Authors>
-    <Description>German OS Backup 1.2.0 — local Windows backup with system usage, source status and in-app update checks.</Description>
+    <Description>German OS Backup C# Edition — local Windows backup with system usage, source status and in-app update checks.</Description>
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
   <ItemGroup>
