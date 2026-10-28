@@ -36,4 +36,4 @@ Name: "desktopicon"; Description: "Создать ярлык на рабочем
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "GermanOSBackup"; ValueData: """{app}\{#AppExeName}"" --background"; Flags: uninsdeletevalue
 
 [Run]
-Filename: "{app}\{#AppExeName}"; Parameters: "--first-run"; Description: "Запустить German OS Backup"; Flags: postinstall nowait skipifsilent
+Filename: "{app}\{#AppExeName}"; Parameters: "--first-run"; Description: "Запустить German OS Backup"; Flags: postinstall nowait skipifsilent runasoriginaluser
