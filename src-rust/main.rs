@@ -353,6 +353,17 @@ impl eframe::App for BackupApp {
                 ui.heading(RichText::new("Состояние системы").size(21.0).color(Color32::WHITE));
                 ui.label(RichText::new(if self.last_stats.running { "● КОПИРОВАНИЕ" } else { "● ОЖИДАНИЕ" }).color(if self.last_stats.running { green } else { muted }).size(11.0));
             });
+            ui.add_space(6.0);
+            let setup_hint = if self.config.destination.is_empty() {
+                "НАЧНИ ЗДЕСЬ · выбери папку назначения, чтобы указать диск для резервной копии"
+            } else if self.config.sources.is_empty() {
+                "ДОБАВЬ ИСТОЧНИКИ · выбери папки, которые нужно сохранить"
+            } else {
+                "ГОТОВО К КОПИРОВАНИЮ · проверь путь назначения и нажми «Начать копирование»"
+            };
+            panel(ui, "БЫСТРАЯ НАСТРОЙКА", |ui| {
+                ui.label(RichText::new(setup_hint).color(if self.config.destination.is_empty() || self.config.sources.is_empty() { Color32::from_rgb(244, 202, 120) } else { green }).size(11.0).strong());
+            });
             ui.add_space(8.0);
             ui.columns(4, |cols| {
                 metric(&mut cols[0], "ФАЙЛЫ СКОПИРОВАНЫ", &self.last_stats.files_copied.to_string(), green);
@@ -398,7 +409,7 @@ impl eframe::App for BackupApp {
                 });
             });
             ui.add_space(10.0);
-            ui.horizontal(|ui| {
+            ui.horizontal_wrapped(|ui| {
                 if ui.button("Проверить SHA-256").clicked() { self.verify_backup(); }
                 if ui.button("Восстановить…").clicked() { self.restore_missing(); }
                 if ui.button("Создать ZIP…").clicked() { self.create_zip(); }
