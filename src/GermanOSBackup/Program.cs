@@ -71,4 +71,5 @@ internal sealed class AppConfig
 {
     public string Destination { get; set; } = "";
     public bool FirstRunComplete { get; set; }
+    public List<string> SelectedSources { get; set; } = new();
 }
