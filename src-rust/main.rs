@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
     fs,
+    io,
     path::{Path, PathBuf},
     sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}},
     thread,
@@ -274,6 +275,38 @@ impl BackupApp {
         });
     }
 
+    fn create_zip(&mut self) {
+        let Some(source) = rfd::FileDialog::new().set_title("Выбери папку резервной копии для архивации").pick_folder() else { return; };
+        let Some(output) = rfd::FileDialog::new().set_title("Сохранить ZIP-архив").add_filter("ZIP-архив", &["zip"]).set_file_name("GermanOSBackup.zip").save_file() else { return; };
+        if output.starts_with(&source) { self.add_log("ZIP-архив нельзя сохранять внутри архивируемой папки"); return; }
+        let stats = self.stats.clone();
+        if let Ok(mut s) = stats.lock() { s.running = true; s.status = "Создание ZIP-архива…".into(); }
+        self.add_log("Создание ZIP-архива запущено вручную");
+        thread::spawn(move || {
+            let result = (|| -> Result<u64, Box<dyn std::error::Error + Send + Sync>> {
+                let file = fs::File::create(&output)?;
+                let mut archive = zip::ZipWriter::new(file);
+                let options = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+                let mut count = 0u64;
+                for entry in WalkDir::new(&source).follow_links(false).into_iter().filter_map(Result::ok) {
+                    if !entry.file_type().is_file() { continue; }
+                    let relative = entry.path().strip_prefix(&source)?;
+                    let name = format!("{}/{}", source.file_name().unwrap_or_default().to_string_lossy(), relative.to_string_lossy().replace('\\\\', "/"));
+                    archive.start_file(name, options)?;
+                    let mut input = fs::File::open(entry.path())?;
+                    io::copy(&mut input, &mut archive)?;
+                    count += 1;
+                }
+                archive.finish()?;
+                Ok(count)
+            })();
+            if let Ok(mut s) = stats.lock() {
+                s.running = false;
+                s.status = match result { Ok(count) => format!("ZIP-архив создан · файлов: {count}"), Err(ref e) => format!("Ошибка создания ZIP: {e}") };
+            }
+        });
+    }
+
     fn stop_backup(&mut self) {
         self.cancel.store(true, Ordering::SeqCst);
         self.add_log("Отправлена команда остановки");
@@ -360,6 +393,7 @@ impl eframe::App for BackupApp {
             ui.horizontal(|ui| {
                 if ui.button("Проверить SHA-256").clicked() { self.verify_backup(); }
                 if ui.button("Восстановить…").clicked() { self.restore_missing(); }
+                if ui.button("Создать ZIP…").clicked() { self.create_zip(); }
                 ui.label(RichText::new("РЕЖИМ").color(muted).size(10.0));
                 for (value, label) in [("eco","Экономия"),("balanced","Баланс"),("max","Максимальная скорость")] {
                     if ui.selectable_label(self.config.performance_mode == value, label).clicked() { self.config.performance_mode = value.into(); self.save_config(); }
