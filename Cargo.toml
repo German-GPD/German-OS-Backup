@@ -7,7 +7,7 @@ description = "Local-first Windows backup utility"
 license = "MIT"
 
 [[bin]]
-name = "GermanOSBackup"
+name = "GermanOSBackup-Rust"
 path = "src-rust/main.rs"
 
 [dependencies]
