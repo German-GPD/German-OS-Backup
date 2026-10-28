@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 
-namespace GermanOSBackup-CS;
+namespace GermanOSBackup-CS-CS;
 
 internal sealed class DashboardForm : Form
 {
@@ -27,7 +27,7 @@ internal sealed class DashboardForm : Form
         this.config = config;
         this.startHidden = startHidden;
         engine = new BackupEngine(config, Program.LogPath);
-        Text = "German OS Backup C# Edition";
+        Text = "German OS Backup C# Edition C# Edition";
         ClientSize = new Size(1180, 820);
         MinimumSize = new Size(900, 680);
         StartPosition = FormStartPosition.CenterScreen;
@@ -35,7 +35,7 @@ internal sealed class DashboardForm : Form
         Font = new Font("Segoe UI", 10F);
 
         var menu = new ContextMenuStrip();
-        menu.Items.Add("Открыть German OS Backup C# Edition", null, (_, _) => ShowWindow());
+        menu.Items.Add("Открыть German OS Backup C# Edition C# Edition", null, (_, _) => ShowWindow());
         menu.Items.Add("Выбрать папки для копирования…", null, async (_, _) => await ShowSourcesAsync());
         menu.Items.Add("Проверить сейчас", null, async (_, _) => await engine.RequestScanAsync());
         menu.Items.Add("Остановить текущую операцию", null, (_, _) => engine.StopCurrentScan());
@@ -47,7 +47,7 @@ internal sealed class DashboardForm : Form
         menu.Items.Add("Выход", null, (_, _) => { allowClose = true; Close(); });
         tray = new NotifyIcon
         {
-            Text = "German OS Backup C# Edition",
+            Text = "German OS Backup C# Edition C# Edition",
             Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? SystemIcons.Shield,
             ContextMenuStrip = menu,
             Visible = true
@@ -63,7 +63,7 @@ internal sealed class DashboardForm : Form
                 // install directory; this avoids common first-run/permission failures.
                 var webViewData = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    "GermanOSBackup-CS", "WebView2");
+                    "GermanOSBackup-CS-CS", "WebView2");
                 Directory.CreateDirectory(webViewData);
 
                 await web.EnsureCoreWebView2Async(
@@ -81,7 +81,7 @@ internal sealed class DashboardForm : Form
                     }
                     catch (Exception ex)
                     {
-                        MessageBox.Show(this, ex.Message, "German OS Backup C# Edition", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        MessageBox.Show(this, ex.Message, "German OS Backup C# Edition C# Edition", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     }
                 };
                 web.CoreWebView2.NavigationCompleted += (_, args) =>
@@ -91,7 +91,7 @@ internal sealed class DashboardForm : Form
                         File.AppendAllText(Program.LogPath, $"[{DateTime.Now:O}] WebView2 navigation failed: {args.WebErrorStatus}{Environment.NewLine}");
                         MessageBox.Show(this, "Web-интерфейс не загрузился: " + args.WebErrorStatus +
                             "\\nПодробности записаны в журнал: " + Program.LogPath,
-                            "German OS Backup C# Edition", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            "German OS Backup C# Edition C# Edition", MessageBoxButtons.OK, MessageBoxIcon.Error);
                         return;
                     }
                     webReady = true;
@@ -107,7 +107,7 @@ internal sealed class DashboardForm : Form
                     ex.Message + "\\n\\n" +
                     "Проверь журнал: " + Program.LogPath +
                     "\\n\\nЕсли Runtime уже установлен, это может быть проблема профиля WebView2 или его прав доступа.",
-                    "German OS Backup C# Edition", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    "German OS Backup C# Edition C# Edition", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
 
             if (startHidden) Hide();
@@ -127,7 +127,7 @@ internal sealed class DashboardForm : Form
             {
                 e.Cancel = true;
                 Hide();
-                tray.ShowBalloonTip(1800, "German OS Backup C# Edition", "Работа продолжается в фоне. Открой приложение через значок в трее.", ToolTipIcon.Info);
+                tray.ShowBalloonTip(1800, "German OS Backup C# Edition C# Edition", "Работа продолжается в фоне. Открой приложение через значок в трее.", ToolTipIcon.Info);
             }
         };
     }
@@ -218,7 +218,7 @@ internal sealed class DashboardForm : Form
         try
         {
             details("Проверяем последнюю версию на GitHub…");
-            if (UpdateClient.DefaultRequestHeaders.UserAgent.Count == 0) UpdateClient.DefaultRequestHeaders.UserAgent.ParseAdd("GermanOSBackup-CS-Updater/1.0");
+            if (UpdateClient.DefaultRequestHeaders.UserAgent.Count == 0) UpdateClient.DefaultRequestHeaders.UserAgent.ParseAdd("GermanOSBackup-CS-CS-Updater/1.0");
             using var response = await UpdateClient.GetAsync("https://api.github.com/repos/German-GPD/German-OS-Backup/releases/latest");
             response.EnsureSuccessStatusCode();
             using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
@@ -234,7 +234,7 @@ internal sealed class DashboardForm : Form
             if (latestVersion <= currentVersion)
             {
                 details("Установлена последняя версия " + currentVersion.ToString(3) + ".");
-                MessageBox.Show(this, "У тебя уже актуальная версия German OS Backup C# Edition " + currentVersion.ToString(3) + ".", "Обновления", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(this, "У тебя уже актуальная версия German OS Backup C# Edition C# Edition " + currentVersion.ToString(3) + ".", "Обновления", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
             string? downloadUrl = null;
@@ -243,7 +243,7 @@ internal sealed class DashboardForm : Form
                 foreach (var asset in assets.EnumerateArray())
                 {
                     if (asset.TryGetProperty("name", out var name) &&
-                        name.GetString() == "GermanOSBackup-CS-Setup-x64.exe" &&
+                        name.GetString() == "GermanOSBackup-CS-CS-Setup-x64.exe" &&
                         asset.TryGetProperty("browser_download_url", out var url))
                     {
                         downloadUrl = url.GetString();
@@ -257,9 +257,9 @@ internal sealed class DashboardForm : Form
                 return;
             }
             if (MessageBox.Show(this,
-                $"Доступна German OS Backup C# Edition {latestVersion}. Сейчас установлена версия {currentVersion.ToString(3)}.\n\nСкачать официальный установщик и запустить обновление? Настройки и папки резервных копий хранятся отдельно.",
+                $"Доступна German OS Backup C# Edition C# Edition {latestVersion}. Сейчас установлена версия {currentVersion.ToString(3)}.\n\nСкачать официальный установщик и запустить обновление? Настройки и папки резервных копий хранятся отдельно.",
                 "Доступно обновление", MessageBoxButtons.YesNo, MessageBoxIcon.Information) != DialogResult.Yes) return;
-            var installerPath = Path.Combine(Path.GetTempPath(), "GermanOSBackup-CS-Setup-x64.exe");
+            var installerPath = Path.Combine(Path.GetTempPath(), "GermanOSBackup-CS-CS-Setup-x64.exe");
             details("Скачиваем установщик версии " + latestVersion + "…");
             var bytes = await UpdateClient.GetByteArrayAsync(downloadUrl);
             await File.WriteAllBytesAsync(installerPath, bytes);
@@ -436,7 +436,7 @@ internal sealed class DashboardForm : Form
     {
         try
         {
-            if (!File.Exists(path)) File.WriteAllText(path, "German OS Backup C# Edition log");
+            if (!File.Exists(path)) File.WriteAllText(path, "German OS Backup C# Edition C# Edition log");
             Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
         }
         catch { }
@@ -469,7 +469,7 @@ button:disabled{opacity:.42;cursor:not-allowed;filter:saturate(.4)}.notice{box-s
 @media(max-width:1000px){.shell{grid-template-columns:170px minmax(0,1fr)}.side{padding:18px 9px}.main{padding:20px 16px}}
 @media(max-width:700px){.side{position:static;height:auto;display:flex;flex-direction:row;align-items:center;overflow-x:auto;padding:10px;border-right:0;border-bottom:1px solid var(--line)}.brand{white-space:nowrap}.nav{display:flex;gap:4px}.nav button{white-space:nowrap}.side-note{display:none}.main{padding:16px 12px}.top h1{font-size:22px}.hero h2{font-size:20px}.status-pill{white-space:normal}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.section-grid{grid-template-columns:minmax(0,1fr)}.actions{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style></head><body><div class="shell">
-<aside class="side"><div class="brand"><div class="mark">G_</div><span>German OS Backup C# Edition</span></div><nav class="nav"><button class="active" onclick="tab('overview')">▦　 Обзор</button><button onclick="act('sources')">▣　 Источники</button><button onclick="act('restore')">↶　 Восстановление</button><button onclick="act('verify')">✓　 Проверка целостности</button><button onclick="act('log')">≡　 Журнал событий</button></nav><div class="side-note"><b>Подсказка</b><p>Копия должна находиться на отдельном физическом диске, если нужно защититься от поломки накопителя.</p><button onclick="act('help')" style="width:100%">Все подсказки</button></div></aside>
+<aside class="side"><div class="brand"><div class="mark">G_</div><span>German OS Backup C# Edition C# Edition</span></div><nav class="nav"><button class="active" onclick="tab('overview')">▦　 Обзор</button><button onclick="act('sources')">▣　 Источники</button><button onclick="act('restore')">↶　 Восстановление</button><button onclick="act('verify')">✓　 Проверка целостности</button><button onclick="act('log')">≡　 Журнал событий</button></nav><div class="side-note"><b>Подсказка</b><p>Копия должна находиться на отдельном физическом диске, если нужно защититься от поломки накопителя.</p><button onclick="act('help')" style="width:100%">Все подсказки</button></div></aside>
 <main class="main"><header class="top"><div><div class="eyebrow">ЛОКАЛЬНАЯ ЗАЩИТА ФАЙЛОВ</div><h1>Обзор резервного копирования</h1></div><div class="top-actions"><button onclick="act('help')">? Помощь</button><button onclick="act('checkUpdates')">↻ Проверить обновления</button><button onclick="act('scan')">Проверить сейчас</button><button class="primary" onclick="act('sources')">Настроить папки</button></div></header>
 <div class="notice" id="notice"></div>
 <section class="hero"><div><div class="label">СОСТОЯНИЕ РЕЗЕРВНОЙ КОПИИ</div><h2 id="headline">Подключаемся…</h2><p id="detail">Состояние обновляется автоматически. Здесь видно, выполняется ли копирование и когда завершалась последняя проверка.</p></div><div class="status-pill" id="pill"><span class="dot"></span><span id="pillText">ЗАПУСК</span></div></section>
@@ -479,7 +479,7 @@ button:disabled{opacity:.42;cursor:not-allowed;filter:saturate(.4)}.notice{box-s
 <article class="card"><div class="section-title"><h3>Что защищено</h3><span class="tip" data-tip="Список источников можно изменить в любой момент.">i</span></div><div class="path"><div class="drive-icon">D:</div><div class="path-text"><b>Папка резервной копии</b><span id="destination">Загрузка пути…</span></div></div><div class="source-row"><span>Выбрано источников</span><b id="sourceCount">—</b></div><div class="source-paths" id="sourcePaths"><div>Загрузка списка папок…</div></div><div class="actions"><button onclick="act('chooseDestination')">Изменить место</button><button onclick="act('openDestination')">Открыть папку</button><button onclick="act('sources')">Выбрать папки</button><button onclick="act('restore')">Восстановить</button></div></article></section>
 <section class="section-grid"><article class="card"><div class="section-title"><h3>Последняя проверка</h3><span class="tip" data-tip="Проверка наличия файлов выполняется автоматически. Глубокая проверка дополнительно сравнивает SHA-256.">i</span></div><div class="health"><div class="health-row"><div class="health-icon">✓</div><div><b>Время завершения</b><small>Последнее сканирование</small></div><strong id="lastScan">Ещё не завершено</strong></div><div class="health-row"><div class="health-icon">↻</div><div><b>Фоновое наблюдение</b><small>Реагирует на изменения файлов</small></div><strong id="watchStatus">Включено</strong></div><div class="health-row"><div class="health-icon">!</div><div><b>Ошибки и пропуски</b><small>Открой журнал для подробностей</small></div><strong id="healthErrors">0</strong></div></div><div class="progress-track"><div class="progress-bar" id="progress"></div></div><div class="hint" id="progressText" style="margin-top:8px">Ожидание сканирования</div></article>
 <article class="card"><div class="section-title"><h3>Быстрые действия</h3><span>Управление</span></div><div class="actions"><button onclick="act('scan')">Запустить проверку</button><button onclick="act('stop')">Остановить</button><button onclick="act('verify')">Проверить SHA-256</button><button onclick="act('log')">Открыть журнал</button><button onclick="act('restore')">Восстановить файлы</button><button onclick="act('exit')">Полностью выйти</button></div><p class="hint" style="margin-top:12px">Закрытие окна прячет приложение в трей. Чтобы остановить работу, выбери «Полностью выйти».</p></article></section>
-<footer class="footer"><span>German OS Backup C# Edition · <span id="appVersion">v1.2.0</span> · Локально, без телеметрии</span><span>Обновления проверяются только по запросу</span></footer></main></div>
+<footer class="footer"><span>German OS Backup C# Edition C# Edition · <span id="appVersion">v1.2.0</span> · Локально, без телеметрии</span><span>Обновления проверяются только по запросу</span></footer></main></div>
 <script>
 const samples=[];function act(action){window.chrome.webview.postMessage({action})}function tab(name){document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('active'));event.currentTarget.classList.add('active');if(name==='overview')return}
 function setMode(mode){window.chrome.webview.postMessage({action:"performanceMode",mode})}
