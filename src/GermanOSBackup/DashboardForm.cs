@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using System.Runtime.InteropServices;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 
@@ -17,6 +18,9 @@ internal sealed class DashboardForm : Form
     private bool allowClose;
     private bool started;
     private bool webReady;
+    private ulong previousIdle, previousKernel, previousUser;
+    private bool hasCpuSample;
+    private static readonly System.Net.Http.HttpClient UpdateClient = new();
 
     public DashboardForm(AppConfig config, bool startHidden)
     {
@@ -132,6 +136,9 @@ internal sealed class DashboardForm : Form
     {
         switch (action)
         {
+            case "checkUpdates":
+                await CheckUpdatesAsync();
+                break;
             case "sources":
                 await ShowSourcesAsync();
                 break;
@@ -204,6 +211,128 @@ internal sealed class DashboardForm : Form
                 break;
         }
     }
+
+
+    private async Task CheckUpdatesAsync()
+    {
+        try
+        {
+            details("Проверяем последнюю версию на GitHub…");
+            UpdateClient.DefaultRequestHeaders.UserAgent.ParseAdd("GermanOSBackup-Updater/1.0");
+            using var response = await UpdateClient.GetAsync("https://api.github.com/repos/German-GPD/German-OS-Backup/releases/latest");
+            response.EnsureSuccessStatusCode();
+            using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            var root = document.RootElement;
+            var tag = root.TryGetProperty("tag_name", out var tagElement) ? tagElement.GetString() : null;
+            if (string.IsNullOrWhiteSpace(tag) || !Version.TryParse(tag.TrimStart('v', 'V'), out var latestVersion))
+            {
+                MessageBox.Show(this, "GitHub не вернул корректный номер версии.", "Проверка обновлений", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            var currentVersion = typeof(Program).Assembly.GetName().Version ?? new Version(1, 2, 0);
+            if (latestVersion <= currentVersion)
+            {
+                details("Установлена последняя версия " + currentVersion.ToString(3) + ".");
+                MessageBox.Show(this, "У тебя уже актуальная версия German OS Backup " + currentVersion.ToString(3) + ".", "Обновления", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            string? downloadUrl = null;
+            if (root.TryGetProperty("assets", out var assets))
+            {
+                foreach (var asset in assets.EnumerateArray())
+                {
+                    if (asset.TryGetProperty("name", out var name) &&
+                        name.GetString() == "GermanOSBackup-Setup-x64.exe" &&
+                        asset.TryGetProperty("browser_download_url", out var url))
+                    {
+                        downloadUrl = url.GetString();
+                        break;
+                    }
+                }
+            }
+            if (string.IsNullOrWhiteSpace(downloadUrl) || !Uri.TryCreate(downloadUrl, UriKind.Absolute, out var parsedUrl) || parsedUrl.Host != "github.com")
+            {
+                MessageBox.Show(this, "В последнем релизе не найден официальный установщик Windows x64.", "Обновление недоступно", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            if (MessageBox.Show(this,
+                $"Доступна German OS Backup {latestVersion}. Сейчас установлена версия {currentVersion.ToString(3)}.\n\nСкачать официальный установщик и запустить обновление? Настройки и папки резервных копий хранятся отдельно.",
+                "Доступно обновление", MessageBoxButtons.YesNo, MessageBoxIcon.Information) != DialogResult.Yes) return;
+            var installerPath = Path.Combine(Path.GetTempPath(), "GermanOSBackup-Setup-x64.exe");
+            details("Скачиваем установщик версии " + latestVersion + "…");
+            var bytes = await UpdateClient.GetByteArrayAsync(downloadUrl);
+            await File.WriteAllBytesAsync(installerPath, bytes);
+            Process.Start(new ProcessStartInfo(installerPath) { UseShellExecute = true });
+            details("Установщик обновления запущен. Следуй инструкциям на экране.");
+            MessageBox.Show(this, "Установщик скачан и запущен. Заверши установку, чтобы обновить программу.", "Обновление запущено", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            details("Не удалось проверить обновления.");
+            MessageBox.Show(this, "Не удалось проверить или скачать обновление. Проверь подключение к интернету.\n\n" + ex.Message, "Ошибка обновления", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            try { File.AppendAllText(Program.LogPath, $"[{DateTime.Now:O}] Update check failed: {ex}{Environment.NewLine}"); } catch { }
+        }
+    }
+
+    private double GetCpuUsagePercent()
+    {
+        try
+        {
+            if (!GetSystemTimes(out var idle, out var kernel, out var user)) return -1;
+            var idleNow = idle.ToUInt64(); var kernelNow = kernel.ToUInt64(); var userNow = user.ToUInt64();
+            if (!hasCpuSample)
+            {
+                previousIdle = idleNow; previousKernel = kernelNow; previousUser = userNow; hasCpuSample = true;
+                return 0;
+            }
+            var idleDelta = idleNow - previousIdle; var kernelDelta = kernelNow - previousKernel; var userDelta = userNow - previousUser;
+            previousIdle = idleNow; previousKernel = kernelNow; previousUser = userNow;
+            var total = kernelDelta + userDelta;
+            return total == 0 ? 0 : Math.Clamp((double)(total - Math.Min(total, idleDelta)) * 100.0 / total, 0, 100);
+        }
+        catch { return -1; }
+    }
+
+    private (double UsedGb, double TotalGb, double Percent) GetRamUsage()
+    {
+        try
+        {
+            var status = new MEMORYSTATUSEX();
+            if (!GlobalMemoryStatusEx(status) || status.ullTotalPhys == 0) return (0, 0, 0);
+            var used = status.ullTotalPhys - status.ullAvailPhys;
+            return (Math.Round(used / 1073741824d, 1), Math.Round(status.ullTotalPhys / 1073741824d, 1), Math.Clamp(status.dwMemoryLoad, 0, 100));
+        }
+        catch { return (0, 0, 0); }
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct FILETIME
+    {
+        public uint dwLowDateTime;
+        public uint dwHighDateTime;
+        public readonly ulong ToUInt64() => ((ulong)dwHighDateTime << 32) | dwLowDateTime;
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool GetSystemTimes(out FILETIME idleTime, out FILETIME kernelTime, out FILETIME userTime);
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+    private sealed class MEMORYSTATUSEX
+    {
+        public uint dwLength = (uint)Marshal.SizeOf(typeof(MEMORYSTATUSEX));
+        public uint dwMemoryLoad;
+        public ulong ullTotalPhys;
+        public ulong ullAvailPhys;
+        public ulong ullTotalPageFile;
+        public ulong ullAvailPageFile;
+        public ulong ullTotalVirtual;
+        public ulong ullAvailVirtual;
+        public ulong ullAvailExtendedVirtual;
+    }
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GlobalMemoryStatusEx([In, Out] MEMORYSTATUSEX lpBuffer);
 
     private async Task StartBackupAsync()
     {
