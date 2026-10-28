@@ -84,7 +84,7 @@ internal sealed class BackupApplicationContext : ApplicationContext
                 var exe = Environment.ProcessPath;
                 if (!string.IsNullOrWhiteSpace(exe))
                     key.SetValue("GermanOSBackup", $"\\"{exe}\\"");
-            }
+}
             else
             {
                 key.DeleteValue("GermanOSBackup", false);
