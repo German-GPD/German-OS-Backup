@@ -36,7 +36,6 @@ internal static class Program
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(installedExe)!);
                 File.Copy(currentExe, installedExe, overwrite: true);
-                RegisterStartup(installedExe);
                 Process.Start(new ProcessStartInfo(installedExe) { UseShellExecute = true });
                 return;
             }
@@ -54,6 +53,8 @@ internal static class Program
             else
             {
                 config = JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(configPath)) ?? new AppConfig();
+                var installedPath = Path.Combine(localAppData, "Programs", AppFolderName, "GermanOSBackup.exe");
+                if (File.Exists(installedPath)) RegisterStartup(installedPath);
             }
 
             if (string.IsNullOrWhiteSpace(config.Destination) || !Path.IsPathFullyQualified(config.Destination))
