@@ -21,6 +21,8 @@ internal sealed class BackupEngine : IDisposable
     private readonly BackupStats stats = new();
     private readonly Stopwatch speedClock = Stopwatch.StartNew();
     private long bytesInWindow; private int disposed; private int started;
+    private readonly object scanCancellationLock = new();
+    private CancellationTokenSource? activeScan;
 
     public BackupEngine(AppConfig config, string logPath) { this.config = config; this.logPath = logPath; }
     public BackupStats Stats => stats;
