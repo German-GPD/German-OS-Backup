@@ -58,7 +58,7 @@ jobs:
           if-no-files-found: error
           retention-days: 90
       - name: Publish latest installer
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' && startsWith(github.event.head_commit.message, 'Release:')
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.version }}
