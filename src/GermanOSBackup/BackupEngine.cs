@@ -5,6 +5,7 @@ internal sealed class BackupEngine : IDisposable
     private readonly AppConfig config;
     private readonly string logPath;
     private readonly SemaphoreSlim scanLock = new(1, 1);
+    private readonly SemaphoreSlim fileCopyLock = new(1, 1);
     private readonly List<FileSystemWatcher> watchers = new();
     private readonly CancellationTokenSource stop = new();
     private readonly object queueLock = new();
@@ -133,10 +134,13 @@ internal sealed class BackupEngine : IDisposable
         yield return ("XboxGames", Path.Combine(drive, "XboxGames"));
     }
 
-    private static async Task CopyFileAsync(string source, string target, CancellationToken ct)
+    private async Task CopyFileAsync(string source, string target, CancellationToken ct)
     {
-        for (var attempt = 0; attempt < 3; attempt++)
+        await fileCopyLock.WaitAsync(ct);
+        try
         {
+            for (var attempt = 0; attempt < 3; attempt++)
+            {
             ct.ThrowIfCancellationRequested();
             try
             {
@@ -156,9 +160,10 @@ internal sealed class BackupEngine : IDisposable
                 File.SetLastWriteTimeUtc(target, src.LastWriteTimeUtc);
                 return;
             }
-            catch (IOException) when (attempt < 2) { await Task.Delay(400 * (attempt + 1), ct); }
-            catch (UnauthorizedAccessException) { return; }
+                catch (IOException) when (attempt < 2) { await Task.Delay(400 * (attempt + 1), ct); }
+            }
         }
+        finally { fileCopyLock.Release(); }
     }
 
     private void Log(string message)
