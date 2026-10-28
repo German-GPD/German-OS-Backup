@@ -1,1 +1,49 @@
-<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#101310"><meta name="description" content="German OS Backup — фоновое резервное копирование Windows на выбранный диск."><title>German OS Backup</title><link rel="stylesheet" href="style.css"><link rel="icon" href="favicon.svg"></head><body><header class="wrap top"><a class="brand" href="#"><i>G_</i> German <b>OS Backup</b></a><nav><a href="#how">Как работает</a><a href="#limits">Ограничения</a><a href="https://github.com/German-GPD/German-OS-Backup">GitHub ↗</a></nav></header><main><section class="hero wrap"><div class="eyebrow">WINDOWS · BACKGROUND BACKUP</div><h1>Твои файлы.<br><span>Вторая копия.</span></h1><p>Тихая утилита для резервного копирования пользовательских данных, настроек и игровых файлов на выбранный диск. Без рекламы, аккаунтов и лишнего шума.</p><div class="actions"><a class="btn green" href="https://github.com/German-GPD/German-OS-Backup/releases">Скачать для Windows ↗</a><a class="btn" href="https://github.com/German-GPD/German-OS-Backup">Исходный код ↗</a></div><div class="diagram"><div class="drive"><strong>C:</strong><span>Users · ProgramData · XboxGames</span></div><div class="arrow">CHANGES ONLY <b>→</b></div><div class="drive dest"><strong>F:</strong><span>Твоя папка для копий</span></div></div><small class="caption">C# · Windows x64 · Open source · MIT License</small></section><section class="wrap features" id="how"><div class="eyebrow">QUIET BY DESIGN</div><h2>Работает. Не мешает.</h2><div class="grid"><article><em>01</em><h3>Выбираешь диск</h3><p>Укажи папку на D:, E:, F: или другом доступном диске.</p></article><article><em>02</em><h3>Копии обновляются</h3><p>Новые и изменённые файлы копируются автоматически. Удаление оригинала не удаляет копию.</p></article><article><em>03</em><h3>Без лишней нагрузки</h3><p>Отслеживание изменений и периодическая сверка вместо постоянного частого сканирования.</p></article></div></section><section class="wrap limits" id="limits"><div><div class="eyebrow">HONEST BY DESIGN</div><h2>Резервная копия —<br>не магия.</h2></div><div><p>Защищённые или занятые файлы могут быть пропущены и скопированы позже. Первое копирование XboxGames может занять много времени и места.</p><p>Это файловая копия, а не загрузочный образ Windows. Для важных данных держи дополнительную копию на другом физическом диске.</p><a href="https://github.com/German-GPD/German-OS-Backup#readme">Документация ↗</a></div></section></main><footer class="wrap foot"><span class="brand"><i>G_</i> German <b>OS Backup</b></span><span>Open source · MIT</span><a href="https://github.com/German-GPD/German-OS-Backup">GitHub ↗</a></footer><script src="script.js"></script></body></html>
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101310">
+  <meta name="description" content="German OS Backup — тихое фоновое резервное копирование Windows на выбранный диск.">
+  <title>German OS Backup — вторая копия файлов</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="wrap top">
+    <a class="brand" href="#" aria-label="German OS Backup"><i>G_</i><span>German <b>OS Backup</b></span></a>
+    <nav aria-label="Основная навигация"><a href="#how">Как работает</a><a href="#limits">Ограничения</a><a href="https://github.com/German-GPD/German-OS-Backup">Исходный код ↗</a></nav>
+  </header>
+  <main>
+    <section class="hero wrap">
+      <div class="eyebrow"><span class="pulse"></span> WINDOWS · LOCAL BACKUP</div>
+      <h1>Твои файлы.<br><span>Вторая копия.</span></h1>
+      <p>Небольшая Windows-утилита, которая хранит дополнительную копию пользовательских данных и игровых файлов. Без аккаунтов, рекламы и фонового шума.</p>
+      <div class="actions">
+        <a class="btn green" href="https://github.com/German-GPD/German-OS-Backup/releases/latest/download/GermanOSBackup-win-x64.zip">Скачать для Windows <span>↗</span></a>
+        <a class="btn" href="https://github.com/German-GPD/German-OS-Backup/releases">Все версии</a>
+      </div>
+      <div class="diagram" aria-label="Схема резервного копирования">
+        <div class="drive"><strong>C:</strong><div><b>Системный диск</b><span>Users · ProgramData · XboxGames</span></div></div>
+        <div class="arrow"><span>LOCAL COPY</span><b>→</b></div>
+        <div class="drive dest"><strong>D:</strong><div><b>Твой диск</b><span>Выбираешь при запуске</span></div></div>
+      </div>
+      <div class="meta"><span>C# / .NET 10</span><span>Windows x64</span><span>Open source</span><span>MIT License</span></div>
+    </section>
+    <section class="wrap features" id="how">
+      <div class="eyebrow">QUIET BY DESIGN</div><h2>Работает. Не мешает.</h2>
+      <div class="grid">
+        <article><em>01 / НАСТРОЙКА</em><h3>Выбираешь место</h3><p>Укажи папку на другом диске — например, D:, E: или F:. Программа сохранит настройки и не будет задавать вопросы при каждом запуске.</p></article>
+        <article><em>02 / КОПИИ</em><h3>Обновляет файлы</h3><p>Отслеживает изменения и периодически сверяет данные. Удаление оригинала не удаляет резервную копию.</p></article>
+        <article><em>03 / КОНТРОЛЬ</em><h3>Всё под рукой</h3><p>Программа находится в системном трее: можно запустить проверку, открыть журнал или отключить автозапуск.</p></article>
+      </div>
+    </section>
+    <section class="wrap limits" id="limits">
+      <div><div class="eyebrow">HONEST BY DESIGN</div><h2>Резервная копия —<br>не магия.</h2></div>
+      <div><p>Это копирование файлов, а не полноценный образ Windows. Для защищённых или занятых файлов могут потребоваться дополнительные права; ошибки отображаются в журнале. Первое копирование может занять много времени и места.</p><p>Храни важные данные ещё и на отдельном физическом носителе. Ни одна программа не заменяет проверку того, что резервная копия действительно открывается.</p><a class="text-link" href="https://github.com/German-GPD/German-OS-Backup#installation">Инструкция по установке ↗</a></div>
+    </section>
+  </main>
+  <footer class="wrap foot"><span class="brand"><i>G_</i><span>German <b>OS Backup</b></span></span><span>Open source · MIT</span><a href="https://github.com/German-GPD/German-OS-Backup">GitHub ↗</a></footer>
+  <script src="script.js"></script>
+</body>
+</html>
