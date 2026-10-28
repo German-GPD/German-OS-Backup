@@ -218,7 +218,7 @@ internal sealed class DashboardForm : Form
         try
         {
             details("Проверяем последнюю версию на GitHub…");
-            UpdateClient.DefaultRequestHeaders.UserAgent.ParseAdd("GermanOSBackup-Updater/1.0");
+            if (UpdateClient.DefaultRequestHeaders.UserAgent.Count == 0) UpdateClient.DefaultRequestHeaders.UserAgent.ParseAdd("GermanOSBackup-Updater/1.0");
             using var response = await UpdateClient.GetAsync("https://api.github.com/repos/German-GPD/German-OS-Backup/releases/latest");
             response.EnsureSuccessStatusCode();
             using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
@@ -301,7 +301,7 @@ internal sealed class DashboardForm : Form
             var status = new MEMORYSTATUSEX();
             if (!GlobalMemoryStatusEx(status) || status.ullTotalPhys == 0) return (0, 0, 0);
             var used = status.ullTotalPhys - status.ullAvailPhys;
-            return (Math.Round(used / 1073741824d, 1), Math.Round(status.ullTotalPhys / 1073741824d, 1), Math.Clamp(status.dwMemoryLoad, 0, 100));
+            return (Math.Round(used / 1073741824d, 1), Math.Round(status.ullTotalPhys / 1073741824d, 1), Math.Clamp((int)status.dwMemoryLoad, 0, 100));
         }
         catch { return (0, 0, 0); }
     }
