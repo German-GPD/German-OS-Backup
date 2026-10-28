@@ -79,7 +79,11 @@ internal sealed class DashboardForm : Form
 
     private async Task StartBackupAsync()
     {
-        try { await engine.StartAsync(); }
+        try
+        {
+            await engine.StartAsync();
+            try { Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.BelowNormal; } catch { }
+        }
         catch (Exception ex) { status.Text = "● ТРЕБУЕТСЯ ВНИМАНИЕ"; headline.Text = "Не удалось начать копирование"; details.Text = ex.Message; }
     }
 
