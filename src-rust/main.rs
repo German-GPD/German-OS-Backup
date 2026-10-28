@@ -279,9 +279,13 @@ impl BackupApp {
     }
 
     fn create_zip(&mut self) {
-        let Some(source) = rfd::FileDialog::new().set_title("Выбери папку резервной копии для архивации").pick_folder() else { return; };
-        let Some(output) = rfd::FileDialog::new().set_title("Сохранить ZIP-архив").add_filter("ZIP-архив", &["zip"]).set_file_name("GermanOSBackup.zip").save_file() else { return; };
-        if output.starts_with(&source) { self.add_log("ZIP-архив нельзя сохранять внутри архивируемой папки"); return; }
+        if self.config.destination.trim().is_empty() || !Path::new(&self.config.destination).is_dir() {
+            self.add_log("Сначала создай резервную копию: выбери папку назначения и нажми «Начать копирование»");
+            return;
+        }
+        let source = PathBuf::from(&self.config.destination);
+        let Some(output) = rfd::FileDialog::new().set_title("Сохранить ZIP-архив резервной копии").add_filter("ZIP-архив", &["zip"]).set_file_name("GermanOSBackup.zip").save_file() else { return; };
+        if output.starts_with(&source) { self.add_log("ZIP-архив нельзя сохранять внутри папки резервной копии"); return; }
         let stats = self.stats.clone();
         if let Ok(mut s) = stats.lock() { s.running = true; s.status = "Создание ZIP-архива…".into(); }
         self.add_log("Создание ZIP-архива запущено вручную");
@@ -294,7 +298,8 @@ impl BackupApp {
                 for entry in WalkDir::new(&source).follow_links(false).into_iter().filter_map(Result::ok) {
                     if !entry.file_type().is_file() { continue; }
                     let relative = entry.path().strip_prefix(&source)?;
-                    let name = format!("{}/{}", source.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "Backup".to_string()), relative.to_string_lossy().replace('\\', "/"));
+                    let root_name = source.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "Backup".to_string());
+                    let name = format!("{}/{}", root_name, relative.to_string_lossy().replace('\\', "/"));
                     archive.start_file(name, options)?;
                     let mut input = fs::File::open(entry.path())?;
                     io::copy(&mut input, &mut archive)?;
