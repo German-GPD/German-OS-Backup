@@ -3,6 +3,7 @@
 use directories::ProjectDirs;
 use eframe::egui::{self, Color32, RichText, Stroke, Vec2};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -188,6 +189,80 @@ impl BackupApp {
         });
     }
 
+    fn verify_backup(&mut self) {
+        if self.config.destination.trim().is_empty() {
+            self.add_log("Сначала выбери папку резервной копии");
+            return;
+        }
+        let destination = PathBuf::from(&self.config.destination);
+        let sources = self.config.sources.clone();
+        let stats = self.stats.clone();
+        if let Ok(mut s) = stats.lock() { s.running = true; s.status = "Глубокая проверка SHA-256…".into(); }
+        self.add_log("Запущена глубокая проверка SHA-256");
+        thread::spawn(move || {
+            let mut checked = 0u64; let mut missing = 0u64; let mut different = 0u64;
+            for source_text in sources {
+                let source = PathBuf::from(&source_text);
+                if !source.is_dir() { continue; }
+                let root_name = source.file_name().map(|n| n.to_os_string()).unwrap_or_else(|| "Backup".into());
+                let target_root = destination.join(root_name);
+                for entry in WalkDir::new(&source).follow_links(false).into_iter().filter_map(Result::ok) {
+                    if !entry.file_type().is_file() { continue; }
+                    let path = entry.path();
+                    let relative = match path.strip_prefix(&source) { Ok(p) => p, Err(_) => continue };
+                    let target = target_root.join(relative);
+                    if !target.is_file() { missing += 1; continue; }
+                    let hash_file = |p: &Path| -> std::io::Result<Vec<u8>> {
+                        use std::io::Read;
+                        let mut file = fs::File::open(p)?;
+                        let mut hasher = Sha256::new();
+                        let mut buffer = [0u8; 1024 * 1024];
+                        loop { let n = file.read(&mut buffer)?; if n == 0 { break; } hasher.update(&buffer[..n]); }
+                        Ok(hasher.finalize().to_vec())
+                    };
+                    match (hash_file(path), hash_file(&target)) {
+                        (Ok(a), Ok(b)) => { checked += 1; if a != b { different += 1; } },
+                        _ => different += 1,
+                    }
+                }
+            }
+            if let Ok(mut s) = stats.lock() {
+                s.running = false;
+                s.status = format!("Проверка завершена · проверено {checked}, отсутствует {missing}, различается {different}");
+            }
+        });
+    }
+
+    fn restore_missing(&mut self) {
+        let backup = rfd::FileDialog::new().set_title("Выбери корень резервной копии").pick_folder();
+        let Some(backup) = backup else { return; };
+        let target = rfd::FileDialog::new().set_title("Куда восстановить отсутствующие файлы").pick_folder();
+        let Some(target) = target else { return; };
+        if backup == target || target.starts_with(&backup) {
+            self.add_log("Папка восстановления не должна находиться внутри резервной копии");
+            return;
+        }
+        let stats = self.stats.clone();
+        if let Ok(mut s) = stats.lock() { s.running = true; s.status = "Восстановление отсутствующих файлов…".into(); }
+        self.add_log("Запущено восстановление без перезаписи существующих файлов");
+        thread::spawn(move || {
+            let mut restored = 0u64; let mut skipped = 0u64; let mut errors = 0u64;
+            for entry in WalkDir::new(&backup).follow_links(false).into_iter().filter_map(Result::ok) {
+                if !entry.file_type().is_file() { continue; }
+                let rel = match entry.path().strip_prefix(&backup) { Ok(p) => p, Err(_) => continue };
+                let out = target.join(rel);
+                if out.exists() { skipped += 1; continue; }
+                if let Some(parent) = out.parent() { if fs::create_dir_all(parent).is_err() { errors += 1; continue; } }
+                match fs::copy(entry.path(), &out) { Ok(_) => restored += 1, Err(_) => errors += 1 }
+            }
+            if let Ok(mut s) = stats.lock() {
+                s.running = false;
+                s.status = format!("Восстановлено {restored} · пропущено {skipped} · ошибок {errors}");
+                s.files_copied += restored; s.errors += errors;
+            }
+        });
+    }
+
     fn stop_backup(&mut self) {
         self.cancel.store(true, Ordering::SeqCst);
         self.add_log("Отправлена команда остановки");
@@ -272,6 +347,8 @@ impl eframe::App for BackupApp {
             });
             ui.add_space(10.0);
             ui.horizontal(|ui| {
+                if ui.button("Проверить SHA-256").clicked() { self.verify_backup(); }
+                if ui.button("Восстановить…").clicked() { self.restore_missing(); }
                 ui.label(RichText::new("РЕЖИМ").color(muted).size(10.0));
                 for (value, label) in [("eco","Экономия"),("balanced","Баланс"),("max","Максимальная скорость")] {
                     if ui.selectable_label(self.config.performance_mode == value, label).clicked() { self.config.performance_mode = value.into(); self.save_config(); }
