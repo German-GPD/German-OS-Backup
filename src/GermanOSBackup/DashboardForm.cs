@@ -73,7 +73,7 @@ internal sealed class DashboardForm : Form
             };
             web.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
             web.CoreWebView2.Settings.AreDevToolsEnabled = false;
-            web.NavigationCompleted += (_, _) => { webReady = true; RefreshStats(); };
+            web.CoreWebView2.NavigationCompleted += (_, _) => { webReady = true; RefreshStats(); };
             web.NavigateToString(Html);
         };
         Shown += async (_, _) =>
