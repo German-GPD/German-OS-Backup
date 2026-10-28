@@ -20,3 +20,4 @@ sysinfo = "0.33"
 directories = "6"
 
 sha2 = "0.10"
+zip = { version = "2", default-features = false, features = ["deflate"] }
