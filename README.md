@@ -1,21 +1,29 @@
 # German OS Backup
 
-A quiet Windows background file-backup utility.
+Лёгкая Windows-утилита для резервного копирования файлов в фоне.
 
-> **Early development (0.1.0).** It has not yet been validated across enough Windows systems to promise bug-free backups. Test recovery and keep a second copy of important data.
+## Что умеет
+- При первом запуске предлагает выбрать папку для резервных копий на другом диске.
+- Копирует `C:\Users`, `C:\ProgramData` и `C:\XboxGames`, если эти папки существуют.
+- Отслеживает изменения файлов и периодически повторно проверяет источники.
+- Не удаляет резервную копию при удалении исходного файла.
+- Работает с низким приоритетом CPU; есть значок в системном трее, ручная проверка и журнал.
+- Автозапуск Windows включается и выключается через меню трея.
+- Не использует аккаунты, аналитику, телеметрию или сетевые запросы.
 
-## Planned behavior
-- First-run destination picker.
-- Copy `C:\Users`, `C:\ProgramData`, and `C:\XboxGames` when present.
-- Copy new and changed files; never propagate deletions.
-- File-system notifications plus periodic rescans, with low CPU priority.
-- No accounts, analytics, telemetry, ads, or network calls.
+## Скачать
+После успешной сборки GitHub Actions создаёт ZIP-архив `GermanOSBackup-win-x64.zip` в разделе Actions → Artifacts. Чтобы опубликовать архив в Releases, создай тег вида `v0.1.0`.
 
-## Limitations
-This is not a bootable system image. Locked/protected files may be skipped until a later scan. XboxGames can be very large. Reparse points should be skipped to avoid loops. Live game saves may change during copying, so file backup cannot guarantee application-consistent snapshots. The first copy may use noticeable disk bandwidth.
+## Важно
+Это файловая копия, а не образ для восстановления Windows. Некоторые защищённые или занятые приложениями файлы могут быть пропущены до следующего сканирования. Сохранения, которые игра активно изменяет, не гарантируют согласованный снимок. Первое копирование XboxGames может занять много времени и места. Проверяй журнал и убедись, что копии действительно открываются.
 
-## Build
-The intended release is a self-contained Windows x64 executable built with C# and .NET 10. Releases will be published from GitHub Actions after the build is validated.
+Папка настроек и журнал: `%LOCALAPPDATA%\GermanOSBackup\`.
 
-## License
-MIT. See [LICENSE](LICENSE).
+## Сборка
+Требуется .NET 10 SDK и Windows:
+```powershell
+dotnet publish .\src\GermanOSBackup\GermanOSBackup.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o .\publish
+```
+
+## Лицензия
+MIT — см. [LICENSE](LICENSE).
