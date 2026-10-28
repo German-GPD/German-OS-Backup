@@ -84,7 +84,7 @@ internal static class Program
         using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", writable: true)
             ?? Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", writable: true);
         if (enabled)
-            key.SetValue("GermanOSBackup", $"\\"{Application.ExecutablePath}\\" --background");
+            key.SetValue("GermanOSBackup", $"\"{Application.ExecutablePath}\" --background");
         else
             key.DeleteValue("GermanOSBackup", throwOnMissingValue: false);
     }
