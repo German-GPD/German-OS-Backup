@@ -28,7 +28,7 @@ internal static class Program
             }
             ValidateDestination(config.Destination);
             var background = args.Contains("--background", StringComparer.OrdinalIgnoreCase);
-            if (background) { try { Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.BelowNormal; } catch { } }
+            try { Process.GetCurrentProcess().PriorityClass = background ? ProcessPriorityClass.BelowNormal : (args.Contains("--first-run", StringComparer.OrdinalIgnoreCase) ? ProcessPriorityClass.AboveNormal : ProcessPriorityClass.Normal); } catch { }
             Application.Run(new DashboardForm(config, background));
         }
         catch (Exception ex)
