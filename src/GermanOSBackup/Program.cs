@@ -32,14 +32,8 @@ internal static class Program
                 };
                 SaveConfig(config);
 
-                var choice = MessageBox.Show(
-                    "Теперь выбери папки, которые нужно сохранять. Можно оставить предложенные варианты и изменить их позже.",
-                    "Шаг 2 из 2 · Источники копирования",
-                    MessageBoxButtons.OKCancel,
-                    MessageBoxIcon.Information);
-                if (choice == DialogResult.OK)
+                using (var sources = new SourcesForm(config))
                 {
-                    using var sources = new SourcesForm(config);
                     if (sources.ShowDialog() != DialogResult.OK)
                     {
                         config.SelectedSources = BackupEngine.Sources().Where(x => Directory.Exists(x.Path)).Select(x => x.Path).ToList();
