@@ -9,7 +9,7 @@
 - **[↓ German OS Backup Rust Edition](https://github.com/German-GPD/German-OS-Backup/releases/latest/download/GermanOSBackup-Rust-Setup-x64.exe)** — нативный интерфейс на Rust, без WebView2. EXE: `GermanOSBackup-Rust.exe`.
 - **[↓ German OS Backup C# Edition](https://github.com/German-GPD/German-OS-Backup/releases/latest/download/GermanOSBackup-CS-Setup-x64.exe)** — Windows Forms + WebView2. EXE: `GermanOSBackup-CS.exe`.
 
-Обе ссылки указывают на файлы одного релиза. Они станут доступны после публикации нового релиза с двумя установщиками.
+Обе ссылки ведут на установщики версии 1.3.0 и будут опубликованы вместе после успешной сборки обоих вариантов.
 
 Сайт: https://german-gpd.github.io/German-OS-Backup/
 
