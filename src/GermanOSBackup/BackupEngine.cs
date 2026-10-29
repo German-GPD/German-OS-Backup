@@ -22,6 +22,7 @@ internal sealed class BackupEngine : IDisposable
     private readonly CancellationTokenSource stop = new();
     private readonly object queueLock = new();
     private readonly HashSet<string> pending = new(StringComparer.OrdinalIgnoreCase);
+    private int overflowScanQueued;
     private readonly BackupStats stats = new();
     private readonly Stopwatch speedClock = Stopwatch.StartNew();
     private long bytesInWindow; private int disposed; private int started;
@@ -129,9 +130,9 @@ internal sealed class BackupEngine : IDisposable
                         InternalBufferSize = 32 * 1024,
                         EnableRaisingEvents = false
                     };
-                    watcher.Created += (_, e) => Queue(e.FullPath);
-                    watcher.Changed += (_, e) => Queue(e.FullPath);
-                    watcher.Renamed += (_, e) => Queue(e.FullPath);
+                    watcher.Created += (_, e) => QueueWatcherPath(e.FullPath);
+                    watcher.Changed += (_, e) => { if (!Directory.Exists(e.FullPath)) Queue(e.FullPath); };
+                    watcher.Renamed += (_, e) => QueueWatcherPath(e.FullPath);
                     watcher.Error += (_, e) =>
                     {
                         Log($"События файловой системы потеряны для {source}: {e.GetException().Message}. Запущена полная сверка.");
@@ -370,7 +371,36 @@ internal sealed class BackupEngine : IDisposable
         }
     }
 
-    private void Queue(string path) { if (Volatile.Read(ref disposed) != 0) return; lock (queueLock) { if (pending.Count < 20000) pending.Add(path); } }
+    private void QueueWatcherPath(string path)
+    {
+        if (Directory.Exists(path))
+        {
+            // A folder can be created or renamed with existing files inside it.
+            // A directory-only event is not enough to back up its contents.
+            _ = Task.Run(RequestScanAsync);
+            return;
+        }
+        Queue(path);
+    }
+
+    private void Queue(string path)
+    {
+        if (Volatile.Read(ref disposed) != 0) return;
+        var overflow = false;
+        lock (queueLock)
+        {
+            if (pending.Count < 20000) pending.Add(path);
+            else overflow = true;
+        }
+        if (overflow && Interlocked.Exchange(ref overflowScanQueued, 1) == 0)
+        {
+            _ = Task.Run(async () =>
+            {
+                try { await RequestScanAsync().ConfigureAwait(false); }
+                finally { Interlocked.Exchange(ref overflowScanQueued, 0); }
+            });
+        }
+    }
 
     private string? MapPath(string path)
     {
