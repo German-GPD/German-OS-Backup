@@ -41,6 +41,9 @@ Filename: "{tmp}\MicrosoftEdgeWebView2Setup.exe"; Parameters: "/silent /install"
 Filename: "{app}\{#AppExeName}"; Parameters: "--first-run"; Description: "Запустить German OS Backup"; Flags: postinstall nowait skipifsilent runasoriginaluser
 
 [Code]
+const
+  WebView2RuntimeId = '{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}';
+
 function HasWebView2Version(RootKey: Integer; KeyPath: String): Boolean;
 var
   Version: String;
@@ -50,11 +53,9 @@ begin
 end;
 
 function IsWebView2RuntimeInstalled: Boolean;
-const
-  RuntimeId = '{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}';
 begin
   Result :=
-    HasWebView2Version(HKLM, 'SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\' + RuntimeId) or
-    HasWebView2Version(HKLM, 'SOFTWARE\Microsoft\EdgeUpdate\Clients\' + RuntimeId) or
-    HasWebView2Version(HKCU, 'Software\Microsoft\EdgeUpdate\Clients\' + RuntimeId);
+    HasWebView2Version(HKLM, 'SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\' + WebView2RuntimeId) or
+    HasWebView2Version(HKLM, 'SOFTWARE\Microsoft\EdgeUpdate\Clients\' + WebView2RuntimeId) or
+    HasWebView2Version(HKCU, 'Software\Microsoft\EdgeUpdate\Clients\' + WebView2RuntimeId);
 end;
