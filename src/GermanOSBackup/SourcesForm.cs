@@ -25,7 +25,15 @@ internal sealed class SourcesForm : Form
         tips.SetToolTip(clear, "Снять выделение со всех папок, чтобы начать выбор заново.");
         tips.SetToolTip(save, "Сохранить выбранные папки и вернуться в главное окно.");
         tips.SetToolTip(cancel, "Отменить изменения и оставить прежний выбор.");
-        BuildTree(); tree.BeforeExpand += (_, e) => LoadChildren(e.Node!); tree.AfterCheck += (_, e) => { if (!loading) SetChildren(e.Node!, e.Node!.Checked); };
+        BuildTree();
+        tree.BeforeExpand += (_, e) => LoadChildren(e.Node!);
+        tree.AfterCheck += (_, e) =>
+        {
+            if (loading) return;
+            loading = true;
+            try { SetChildren(e.Node!, e.Node!.Checked); }
+            finally { loading = false; }
+        };
         clear.Click += (_, _) => { loading = true; foreach (TreeNode node in tree.Nodes) { node.Checked = false; SetChildren(node, false); } loading = false; };
         add.Click += (_, _) => { using var d = new FolderBrowserDialog { Description = "Выбери папку для резервного копирования", ShowNewFolderButton = false }; if (d.ShowDialog(this) == DialogResult.OK && Directory.Exists(d.SelectedPath)) AddPath(d.SelectedPath, true); };
         save.Click += (_, _) =>
@@ -115,7 +123,15 @@ internal sealed class SourcesForm : Form
         }
         catch { }
     }
-    private void SetChildren(TreeNode node, bool value) { loading = true; foreach (TreeNode child in node.Nodes) { if (child.Text == "…") continue; child.Checked = value; SetChildren(child, value); } loading = false; }
+    private void SetChildren(TreeNode node, bool value)
+    {
+        foreach (TreeNode child in node.Nodes)
+        {
+            if (child.Tag == null && child.Text == "…") continue;
+            child.Checked = value;
+            SetChildren(child, value);
+        }
+    }
     private IEnumerable<string> GetSelectedRoots() { foreach (TreeNode node in tree.Nodes) foreach (var p in Selected(node, false)) yield return p; }
     private IEnumerable<string> Selected(TreeNode node, bool ancestorChecked)
     {
