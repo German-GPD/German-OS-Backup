@@ -1,4 +1,4 @@
-name: Build both editions from rust + cs branches
+name: Build unified German OS Backup
 on:
   push:
     branches: [main]
@@ -8,7 +8,7 @@ on:
 permissions:
   contents: write
 concurrency:
-  group: editions-build-${{ github.ref }}
+  group: unified-build-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   build:
@@ -18,87 +18,48 @@ jobs:
       - name: Read version
         id: version
         shell: pwsh
-        run: echo "version=$((Get-Content version.txt -Raw).Trim())" >> $env:GITHUB_OUTPUT
-      - uses: actions/checkout@v4
-        with:
-          ref: rust
-          path: rust-source
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: x86_64-pc-windows-msvc
-      - name: Build Rust Edition
-        run: cargo build --manifest-path .\rust-source\Cargo.toml --release --target x86_64-pc-windows-msvc --target-dir .\rust-source\target
-      - name: Prepare Rust installer
-        shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path .\rust-source\publish | Out-Null
-          Copy-Item .\rust-source\target\x86_64-pc-windows-msvc\release\GermanOSBackup-Rust.exe .\rust-source\publish\GermanOSBackup-Rust.exe
-      - name: Install Inno Setup
-        run: choco install innosetup --yes --no-progress
-      - name: Package Rust Edition
-        run: iscc /DAppVersion=${{ steps.version.outputs.version }} .\rust-source\installer\GermanOSBackup-Rust.iss
-      - uses: actions/checkout@v4
-        with:
-          ref: cs
-          path: cs-source
+          $v = (Get-Content version.txt -Raw).Trim()
+          "version=$v" >> $env:GITHUB_OUTPUT
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
-      - name: Build C# Edition
-        run: dotnet publish .\cs-source\src\GermanOSBackup\GermanOSBackup.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o .\cs-source\publish
-      - name: Package C# Edition
-        run: iscc /DAppVersion=${{ steps.version.outputs.version }} .\cs-source\installer\GermanOSBackup-CS.iss
-      - uses: actions/upload-artifact@v4
-        with:
-          name: GermanOSBackup-Rust-Setup-x64
-          path: .\rust-source\installer\output\GermanOSBackup-Rust-Setup-x64.exe
-          if-no-files-found: error
-          retention-days: 90
-      - uses: actions/upload-artifact@v4
-        with:
-          name: GermanOSBackup-CS-Setup-x64
-          path: .\cs-source\installer\output\GermanOSBackup-CS-Setup-x64.exe
-          if-no-files-found: error
-          retention-days: 90
-      - name: Verify both installers exist
-        if: github.ref == 'refs/heads/main'
+      - name: Restore and build
+        run: dotnet restore .\src\GermanOSBackup\GermanOSBackup.csproj
+      - name: Publish single Windows application
+        run: dotnet publish .\src\GermanOSBackup\GermanOSBackup.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:Version=${{ steps.version.outputs.version }} -o .\publish
+      - name: Install Inno Setup
+        run: choco install innosetup --yes --no-progress
+      - name: Package one installer
+        run: iscc /DAppVersion=${{ steps.version.outputs.version }} .\installer\GermanOSBackup.iss
+      - name: Verify installer and create checksum
         shell: pwsh
         run: |
-          $rust = ".\rust-source\installer\output\GermanOSBackup-Rust-Setup-x64.exe"
-          $cs = ".\cs-source\installer\output\GermanOSBackup-CS-Setup-x64.exe"
-          if (!(Test-Path $rust)) { throw "Rust installer missing: $rust" }
-          if (!(Test-Path $cs)) { throw "C# installer missing: $cs" }
-          Write-Host "Both installers exist. Release may proceed."
-      - name: Generate SHA-256 checksums
-        if: github.ref == 'refs/heads/main'
-        shell: pwsh
-        run: |
-          $files = @(
-            ".\\rust-source\\installer\\output\\GermanOSBackup-Rust-Setup-x64.exe",
-            ".\\cs-source\\installer\\output\\GermanOSBackup-CS-Setup-x64.exe"
-          )
-          $lines = foreach ($file in $files) {
-            $hash = (Get-FileHash -Algorithm SHA256 $file).Hash.ToLowerInvariant()
-            "$hash  $([System.IO.Path]::GetFileName($file))"
-          }
-          Set-Content -Path ".\\SHA256SUMS.txt" -Value $lines -Encoding utf8
-      - name: Publish both installers
+          $installer = ".\installer\output\GermanOSBackup-Setup-x64.exe"
+          if (!(Test-Path $installer)) { throw "Installer missing: $installer" }
+          $hash = (Get-FileHash -Algorithm SHA256 $installer).Hash.ToLowerInvariant()
+          "$hash  GermanOSBackup-Setup-x64.exe" | Set-Content ".\SHA256SUMS.txt" -Encoding utf8
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GermanOSBackup-Setup-x64
+          path: |
+            .\installer\output\GermanOSBackup-Setup-x64.exe
+            .\SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 90
+      - name: Publish release
         if: github.ref == 'refs/heads/main' && startsWith(github.event.head_commit.message, 'Release:')
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.version }}
           target_commitish: main
-          name: German OS Backup ${{ steps.version.outputs.version }} — Rust + C#
+          name: German OS Backup ${{ steps.version.outputs.version }}
           body: |
-            Две редакции German OS Backup для Windows x64:
-            - GermanOSBackup-Rust-Setup-x64.exe — нативная Rust Edition.
-            - GermanOSBackup-CS-Setup-x64.exe — C# Edition с WebView2.
-            Настройки и резервные копии хранятся отдельно от файлов программы.
-            SHA256SUMS.txt содержит SHA-256-хэши обоих установщиков для проверки целостности.
-            Установщики не подписаны сертификатом Authenticode; Windows SmartScreen может показать предупреждение.
+            Единая версия German OS Backup для Windows x64.
+            SHA256SUMS.txt содержит контрольную сумму установщика.
+            Установщик не подписан Authenticode; Windows SmartScreen может предупредить о неизвестном издателе.
           files: |
-            rust-source/installer/output/GermanOSBackup-Rust-Setup-x64.exe
-            cs-source/installer/output/GermanOSBackup-CS-Setup-x64.exe
+            installer/output/GermanOSBackup-Setup-x64.exe
             SHA256SUMS.txt
           overwrite_files: true
           make_latest: true
