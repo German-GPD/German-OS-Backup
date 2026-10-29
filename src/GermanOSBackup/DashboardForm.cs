@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 
@@ -251,22 +252,24 @@ internal sealed class DashboardForm : Form
                 return;
             }
             string? downloadUrl = null;
+            string? checksumUrl = null;
             if (root.TryGetProperty("assets", out var assets))
             {
                 foreach (var asset in assets.EnumerateArray())
                 {
-                    if (asset.TryGetProperty("name", out var name) &&
-                        name.GetString() == "GermanOSBackup-CS-Setup-x64.exe" &&
-                        asset.TryGetProperty("browser_download_url", out var url))
-                    {
-                        downloadUrl = url.GetString();
-                        break;
-                    }
+                    if (!asset.TryGetProperty("name", out var name) || !asset.TryGetProperty("browser_download_url", out var url)) continue;
+                    if (name.GetString() == "GermanOSBackup-CS-Setup-x64.exe") downloadUrl = url.GetString();
+                    else if (name.GetString() == "SHA256SUMS.txt") checksumUrl = url.GetString();
                 }
             }
-            if (string.IsNullOrWhiteSpace(downloadUrl) || !Uri.TryCreate(downloadUrl, UriKind.Absolute, out var parsedUrl) || parsedUrl.Scheme != Uri.UriSchemeHttps || parsedUrl.Host != "github.com" || !parsedUrl.AbsolutePath.StartsWith("/German-GPD/German-OS-Backup/releases/download/", StringComparison.Ordinal))
+            static bool IsOfficialReleaseAsset(string? value) =>
+                Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
+                uri.Scheme == Uri.UriSchemeHttps &&
+                uri.Host == "github.com" &&
+                uri.AbsolutePath.StartsWith("/German-GPD/German-OS-Backup/releases/download/", StringComparison.Ordinal);
+            if (!IsOfficialReleaseAsset(downloadUrl) || !IsOfficialReleaseAsset(checksumUrl))
             {
-                MessageBox.Show(this, "В последнем релизе не найден официальный установщик Windows x64.", "Обновление недоступно", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, "В официальном релизе не найден установщик или файл контрольных сумм.", "Обновление недоступно", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
             if (MessageBox.Show(this,
@@ -274,7 +277,23 @@ internal sealed class DashboardForm : Form
                 "Доступно обновление", MessageBoxButtons.YesNo, MessageBoxIcon.Information) != DialogResult.Yes) return;
             var installerPath = Path.Combine(Path.GetTempPath(), "GermanOSBackup-CS-Setup-x64.exe");
             details("Скачиваем установщик версии " + latestVersion + "…");
-            var bytes = await UpdateClient.GetByteArrayAsync(downloadUrl);
+            var bytes = await UpdateClient.GetByteArrayAsync(downloadUrl!);
+            var manifest = await UpdateClient.GetStringAsync(checksumUrl!);
+            string? expectedHash = null;
+            foreach (var line in manifest.Split(new[] { '\\r', '\\n' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                var parts = line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length == 2 && parts[1].TrimStart('*') == "GermanOSBackup-CS-Setup-x64.exe")
+                {
+                    expectedHash = parts[0];
+                    break;
+                }
+            }
+            if (string.IsNullOrWhiteSpace(expectedHash) || expectedHash.Length != 64 ||
+                !CryptographicOperations.FixedTimeEquals(Convert.FromHexString(expectedHash), SHA256.HashData(bytes)))
+            {
+                throw new InvalidDataException("SHA-256 установщика не совпадает с контрольной суммой официального релиза. Установка отменена.");
+            }
             await File.WriteAllBytesAsync(installerPath, bytes);
             Process.Start(new ProcessStartInfo(installerPath) { UseShellExecute = true });
             details("Установщик обновления запущен. Следуй инструкциям на экране.");
