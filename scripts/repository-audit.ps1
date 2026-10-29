@@ -15,6 +15,7 @@ $checks = @{
     'index.html' = "VERSION $version"
     'dashboard.html' = "v$version"
     'script.js' = $version
+    'src/GermanOSBackup/DashboardForm.cs' = $version
 }
 foreach ($entry in $checks.GetEnumerator()) {
     $content = Get-Content $entry.Key -Raw
