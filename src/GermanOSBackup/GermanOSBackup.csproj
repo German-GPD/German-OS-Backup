@@ -15,4 +15,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3650.58" />
   </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="..\\..\\dashboard.html" Link="dashboard.html" LogicalName="GermanOSBackup.dashboard.html" />
+  </ItemGroup>
 </Project>
