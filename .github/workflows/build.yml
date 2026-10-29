@@ -55,6 +55,14 @@ jobs:
           $native = ".\native-engine\target\x86_64-pc-windows-msvc\release\german_os_backup_engine.dll"
           if (!(Test-Path $native)) { throw "Rust native engine missing: $native" }
           Copy-Item $native ".\publish\german_os_backup_engine.dll"
+      - name: Download official WebView2 bootstrapper
+        shell: pwsh
+        run: |
+          $bootstrapper = ".\publish\MicrosoftEdgeWebView2Setup.exe"
+          Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/p/?LinkId=2124703" -OutFile $bootstrapper
+          if (!(Test-Path $bootstrapper) -or (Get-Item $bootstrapper).Length -lt 100000) {
+            throw "Microsoft WebView2 bootstrapper download is missing or invalid."
+          }
       - name: Install Inno Setup
         run: choco install innosetup --yes --no-progress
       - name: Package one installer
