@@ -25,10 +25,10 @@ CloseApplications=yes
 RestartApplications=no
 
 [Files]
-Source: "..\publish\GermanOSBackup-CS.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\publish\GermanOSBackup.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{autoprograms}\German OS Backup C# Edition"; Filename: "{app}\{#AppExeName}"
+Name: "{autoprograms}\German OS Backup"; Filename: "{app}\{#AppExeName}"
 Name: "{autodesktop}\German OS Backup C# Edition"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
 
 [Tasks]
