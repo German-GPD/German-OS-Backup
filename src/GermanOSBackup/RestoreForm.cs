@@ -24,6 +24,7 @@ internal sealed class RestoreForm : Form
     private readonly Button selectNone = Palette.Button("Снять выбор", false);
     private readonly Button chooseDestination = Palette.Button("Папка восстановления…", false);
     private List<string> allFiles = new();
+    private readonly HashSet<string> checkedPaths = new(StringComparer.OrdinalIgnoreCase);
     private bool loading;
 
     public RestoreForm(string backupRoot)
@@ -116,9 +117,32 @@ internal sealed class RestoreForm : Form
         };
         refresh.Click += async (_, _) => await LoadFilesAsync();
         search.TextChanged += (_, _) => ApplyFilter();
-        selectAll.Click += (_, _) => { foreach (ListViewItem item in files.Items) item.Checked = true; UpdateStatus(); };
-        selectNone.Click += (_, _) => { foreach (ListViewItem item in files.Items) item.Checked = false; UpdateStatus(); };
-        files.ItemChecked += (_, _) => { if (!loading) UpdateStatus(); };
+        selectAll.Text = "Выбрать показанные";
+        selectAll.Click += (_, _) =>
+        {
+            foreach (ListViewItem item in files.Items)
+            {
+                if (item.Tag is string path) checkedPaths.Add(path);
+                item.Checked = true;
+            }
+            UpdateStatus();
+        };
+        selectNone.Click += (_, _) =>
+        {
+            foreach (ListViewItem item in files.Items)
+            {
+                if (item.Tag is string path) checkedPaths.Remove(path);
+                item.Checked = false;
+            }
+            UpdateStatus();
+        };
+        files.ItemChecked += (_, e) =>
+        {
+            if (loading || e.Item.Tag is not string path) return;
+            if (e.Item.Checked) checkedPaths.Add(path);
+            else checkedPaths.Remove(path);
+            UpdateStatus();
+        };
         restore.Click += async (_, _) => await RestoreSelectedAsync();
 
         destination.Text = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
@@ -143,6 +167,7 @@ internal sealed class RestoreForm : Form
                     && !path.Contains(".gob-rust-", StringComparison.OrdinalIgnoreCase))
                 .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
                 .ToList());
+            checkedPaths.IntersectWith(allFiles);
             ApplyFilter();
             status.Text = $"Найдено файлов: {allFiles.Count:N0}";
         }
@@ -178,7 +203,7 @@ internal sealed class RestoreForm : Form
                 {
                     var info = new FileInfo(path);
                     var relative = Path.GetRelativePath(backupRoot, path);
-                    var item = new ListViewItem(relative) { Tag = path, Checked = false };
+                    var item = new ListViewItem(relative) { Tag = path, Checked = checkedPaths.Contains(path) };
                     item.SubItems.Add(FormatSize(info.Length));
                     item.SubItems.Add(info.LastWriteTime.ToString("dd.MM.yyyy HH:mm"));
                     files.Items.Add(item);
@@ -241,11 +266,7 @@ internal sealed class RestoreForm : Form
 
     private async Task RestoreSelectedAsync()
     {
-        var selected = files.CheckedItems.Cast<ListViewItem>()
-            .Select(item => item.Tag as string)
-            .Where(path => !string.IsNullOrWhiteSpace(path) && File.Exists(path))
-            .Cast<string>()
-            .ToList();
+        var selected = checkedPaths.Where(File.Exists).ToList();
 
         if (selected.Count == 0)
         {
@@ -328,7 +349,7 @@ internal sealed class RestoreForm : Form
 
     private void UpdateStatus()
     {
-        var checkedCount = files.Items.Cast<ListViewItem>().Count(item => item.Checked);
+        var checkedCount = checkedPaths.Count;
         var hasDestination = !string.IsNullOrWhiteSpace(destination.Text) && Directory.Exists(destination.Text);
         restore.Enabled = !loading && allFiles.Count > 0 && hasDestination;
         if (allFiles.Count == 0)
