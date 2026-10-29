@@ -18,6 +18,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-pc-windows-msvc
+      - name: Run Rust regression tests
+        run: cargo test --target x86_64-pc-windows-msvc
       - name: Build Rust Edition
         run: cargo build --release --target x86_64-pc-windows-msvc
       - name: Prepare Rust installer
