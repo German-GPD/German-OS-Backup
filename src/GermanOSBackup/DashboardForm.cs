@@ -13,6 +13,8 @@ internal sealed class DashboardForm : Form
     private readonly AppConfig config;
     private readonly BackupEngine engine;
     private readonly bool startHidden;
+    private readonly EventWaitHandle activationEvent;
+    private RegisteredWaitHandle? activationWait;
     private readonly WebView2 web = new() { Dock = DockStyle.Fill };
     private readonly System.Windows.Forms.Timer uiTimer = new() { Interval = 1000 };
     private readonly NotifyIcon tray;
@@ -23,10 +25,11 @@ internal sealed class DashboardForm : Form
     private bool hasCpuSample;
     private static readonly System.Net.Http.HttpClient UpdateClient = new();
 
-    public DashboardForm(AppConfig config, bool startHidden)
+    public DashboardForm(AppConfig config, bool startHidden, EventWaitHandle activationEvent)
     {
         this.config = config;
         this.startHidden = startHidden;
+        this.activationEvent = activationEvent;
         engine = new BackupEngine(config, Program.LogPath);
         Text = "German OS Backup";
         ClientSize = new Size(1180, 820);
@@ -58,6 +61,16 @@ internal sealed class DashboardForm : Form
         Controls.Add(web);
         Shown += async (_, _) =>
         {
+            activationWait ??= ThreadPool.RegisterWaitForSingleObject(
+                activationEvent,
+                (_, _) =>
+                {
+                    if (IsDisposed || Disposing) return;
+                    try { BeginInvoke(ShowWindow); } catch { }
+                },
+                null,
+                Timeout.Infinite,
+                executeOnlyOnce: false);
             ApplyMicaBackdrop();
             try
             {
@@ -504,6 +517,7 @@ internal sealed class DashboardForm : Form
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
         uiTimer.Stop(); uiTimer.Dispose();
+        activationWait?.Unregister(null);
         tray.Visible = false; tray.Dispose(); engine.Dispose();
         base.OnFormClosed(e);
     }
