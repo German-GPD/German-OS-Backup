@@ -30,6 +30,8 @@ jobs:
           dotnet-version: 10.0.x
       - name: Restore and build
         run: dotnet restore .\src\GermanOSBackup\GermanOSBackup.csproj
+      - name: Test Rust backup engine
+        run: cargo test --manifest-path .\rust-engine\Cargo.toml --target x86_64-pc-windows-msvc
       - name: Build native Rust engine
         run: cargo build --manifest-path .\rust-engine\Cargo.toml --release --target x86_64-pc-windows-msvc
       - name: Publish single Windows application
