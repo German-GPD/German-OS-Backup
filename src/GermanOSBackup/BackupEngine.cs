@@ -395,7 +395,7 @@ internal sealed class BackupEngine : IDisposable
                     var src = new FileInfo(source); if (!src.Exists) return;
                     if (File.Exists(target)) { var dst = new FileInfo(target); if (dst.Length == src.Length && dst.LastWriteTimeUtc >= src.LastWriteTimeUtc) return; }
                     Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-                    if (mode != "eco" && await Task.Run(() => RustCopyEngine.TryCopy(source, target), ct).ConfigureAwait(false))
+                    if (mode != "eco" && src.Length <= 64L * 1024 * 1024 && await Task.Run(() => RustCopyEngine.TryCopy(source, target), ct).ConfigureAwait(false))
                     {
                         File.SetLastWriteTimeUtc(target, src.LastWriteTimeUtc);
                         Interlocked.Increment(ref stats.FilesCopied);
@@ -406,39 +406,20 @@ internal sealed class BackupEngine : IDisposable
                     }
                     temp = target + ".gob-tmp-" + Environment.ProcessId + "-" + Guid.NewGuid().ToString("N");
                     long written = 0;
-                    // Small game-save/config files are copied by Rust. Large files and
-                    // Eco mode stay on the cancellable asynchronous managed path.
-                    var rustResult = src.Length <= 64L * 1024 * 1024 && mode != "eco"
-                        ? await Task.Run(() =>
-                        {
-                            var success = RustBackupEngine.TryCopyFile(source, temp, out var copiedBytes);
-                            return (Success: success, Bytes: copiedBytes);
-                        }, ct)
-                        : (Success: false, Bytes: 0L);
-                    if (rustResult.Success)
+                    var bufferSize = mode == "eco" ? 128 * 1024 : mode == "balanced" ? 512 * 1024 : 1024 * 1024;
+                    await using (var input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, bufferSize, FileOptions.Asynchronous | FileOptions.SequentialScan))
+                    await using (var output = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None, bufferSize, FileOptions.Asynchronous | FileOptions.SequentialScan))
                     {
-                        written = rustResult.Bytes;
-                        ct.ThrowIfCancellationRequested();
-                        Interlocked.Add(ref bytesInWindow, written);
-                        UpdateSpeed();
-                    }
-                    else
-                    {
-                        var bufferSize = mode == "eco" ? 128 * 1024 : mode == "balanced" ? 512 * 1024 : 1024 * 1024;
-                        await using (var input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, bufferSize, FileOptions.Asynchronous | FileOptions.SequentialScan))
-                        await using (var output = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None, bufferSize, FileOptions.Asynchronous | FileOptions.SequentialScan))
+                        var buffer = new byte[bufferSize]; int read;
+                        while ((read = await input.ReadAsync(buffer, ct)) > 0)
                         {
-                            var buffer = new byte[bufferSize]; int read;
-                            while ((read = await input.ReadAsync(buffer, ct)) > 0)
-                            {
-                                await output.WriteAsync(buffer.AsMemory(0, read), ct);
-                                written += read;
-                                Interlocked.Add(ref bytesInWindow, read);
-                                UpdateSpeed();
-                                if (mode == "eco") await Task.Delay(8, ct);
-                            }
-                            await output.FlushAsync(ct);
+                            await output.WriteAsync(buffer.AsMemory(0, read), ct);
+                            written += read;
+                            Interlocked.Add(ref bytesInWindow, read);
+                            UpdateSpeed();
+                            if (mode == "eco") await Task.Delay(8, ct);
                         }
+                        await output.FlushAsync(ct);
                     }
                     File.Move(temp, target, true); temp = null; File.SetLastWriteTimeUtc(target, src.LastWriteTimeUtc);
                     Interlocked.Increment(ref stats.FilesCopied); Interlocked.Add(ref stats.BytesCopied, written); return;
