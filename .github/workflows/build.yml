@@ -2,8 +2,20 @@ name: Build unified German OS Backup
 on:
   push:
     branches: [main]
+    paths:
+      - 'src/**'
+      - 'native-engine/**'
+      - 'installer/**'
+      - 'version.txt'
+      - '.github/workflows/build.yml'
   pull_request:
     branches: [main]
+    paths:
+      - 'src/**'
+      - 'native-engine/**'
+      - 'installer/**'
+      - 'version.txt'
+      - '.github/workflows/build.yml'
   workflow_dispatch:
 permissions:
   contents: write
