@@ -508,9 +508,33 @@ internal sealed class DashboardForm : Form
         base.OnFormClosed(e);
     }
 
-    private static readonly string SystemAccentHex = "#43ff78";
+    private static readonly string SystemAccentHex = GetSystemAccentHex();
 
-    private static string GetSystemAccentHex() => "#43ff78";
+    private static string GetSystemAccentHex()
+    {
+        // Windows stores the current user accent as an ARGB DWORD.
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(@"Software\\Microsoft\\Windows\\DWM");
+            var raw = key?.GetValue("AccentColor");
+            if (raw is int value)
+            {
+                var color = Color.FromArgb(value);
+                // Very dark accent colors are hard to read on the dark dashboard.
+                var luminance = (0.2126 * color.R + 0.7152 * color.G + 0.0722 * color.B) / 255.0;
+                if (luminance < 0.28)
+                {
+                    color = Color.FromArgb(
+                        Math.Min(255, color.R + 70),
+                        Math.Min(255, color.G + 70),
+                        Math.Min(255, color.B + 70));
+                }
+                return $"#{color.R:X2}{color.G:X2}{color.B:X2}".ToLowerInvariant();
+            }
+        }
+        catch { }
+        return "#9bc9a4";
+    }
 
     private void ApplyMicaBackdrop()
     {
