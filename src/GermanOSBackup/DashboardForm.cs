@@ -440,6 +440,9 @@ internal sealed class DashboardForm : Form
         var status = scanning ? "copying" : errors > 0 ? "attention" : s.HasCompletedInitialScan ? "completed" : "waiting";
         var headline = scanning ? (s.HasCompletedInitialScan ? "Обновляем резервную копию" : "Создаём первую копию")
             : errors > 0 ? "Нужна проверка ошибок" : s.HasCompletedInitialScan ? "Последнее копирование завершено" : "Ожидаем ручного запуска";
+        // Query the OS once per UI refresh and reuse the same coherent RAM sample.
+        var ram = GetRamUsage();
+        var cpu = GetCpuUsagePercent();
         var payload = JsonSerializer.Serialize(new
         {
             status,
@@ -456,10 +459,10 @@ internal sealed class DashboardForm : Form
             sourcePaths = config.SelectedSources ?? new List<string>(),
             autoUpdateSources = config.AutoUpdateSources ?? new List<string>(),
             version = typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "1.4.0",
-            cpuPercent = GetCpuUsagePercent(),
-            ramUsedGb = GetRamUsage().UsedGb,
-            ramTotalGb = GetRamUsage().TotalGb,
-            ramPercent = GetRamUsage().Percent,
+            cpuPercent = cpu,
+            ramUsedGb = ram.UsedGb,
+            ramTotalGb = ram.TotalGb,
+            ramPercent = ram.Percent,
             performanceMode = engine.PerformanceMode
         });
         _ = web.CoreWebView2.ExecuteScriptAsync($"window.updateStats({payload});");
