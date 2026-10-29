@@ -42,16 +42,43 @@ internal sealed class BackupEngine : IDisposable
     public static IEnumerable<(string Name, string Path)> Sources()
     {
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var commonData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
+        var windowsRoot = Path.GetPathRoot(Environment.GetFolderPath(Environment.SpecialFolder.Windows)) ?? "C:\\";
         var candidates = new[]
         {
             ("Рабочий стол", Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory)),
             ("Документы", Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)),
             ("Изображения", Environment.GetFolderPath(Environment.SpecialFolder.MyPictures)),
             ("Видео", Environment.GetFolderPath(Environment.SpecialFolder.MyVideos)),
-            ("Загрузки", Path.Combine(home, "Downloads"))
+            ("Загрузки", Path.Combine(home, "Downloads")),
+            ("Сохранённые игры", Environment.GetFolderPath(Environment.SpecialFolder.SavedGames)),
+            ("AppData-Roaming", appData),
+            ("AppData-LocalLow", Path.Combine(home, "AppData", "LocalLow")),
+            ("AppData-Local", localAppData),
+            ("ProgramData", commonData),
+            ("XboxGames", Path.Combine(windowsRoot, "XboxGames"))
         };
         foreach (var item in candidates)
-            if (!string.IsNullOrWhiteSpace(item.Item2)) yield return item;
+            if (!string.IsNullOrWhiteSpace(item.Item2) && Directory.Exists(item.Item2))
+                yield return (item.Item1, Path.GetFullPath(item.Item2));
+    }
+
+    public static IEnumerable<string> DefaultSources()
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var candidates = new[]
+        {
+            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            Path.Combine(home, "AppData", "LocalLow"),
+            Environment.GetFolderPath(Environment.SpecialFolder.SavedGames)
+        };
+        return candidates
+            .Where(path => !string.IsNullOrWhiteSpace(path) && Directory.Exists(path))
+            .Select(Path.GetFullPath)
+            .Distinct(StringComparer.OrdinalIgnoreCase);
     }
 
     public Task StartAsync()
@@ -313,8 +340,14 @@ internal sealed class BackupEngine : IDisposable
         var configured = config.SelectedSources;
         if (configured is not { Count: > 0 })
         {
-            foreach (var (name, path) in Sources())
-                if (Directory.Exists(path)) yield return (name, path, Path.Combine(config.Destination, name));
+            foreach (var path in DefaultSources())
+            {
+                var standard = Sources().FirstOrDefault(x =>
+                    string.Equals(path, x.Path, StringComparison.OrdinalIgnoreCase) ||
+                    path.StartsWith(x.Path.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase));
+                var name = string.IsNullOrEmpty(standard.Name) ? "Custom" : standard.Name;
+                yield return (name, path, Path.Combine(config.Destination, name));
+            }
             yield break;
         }
 
