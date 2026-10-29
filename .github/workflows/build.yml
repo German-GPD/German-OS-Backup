@@ -69,12 +69,16 @@ jobs:
           if (!(Test-Path $installer)) { throw "Installer missing: $installer" }
           $hash = (Get-FileHash -Algorithm SHA256 $installer).Hash.ToLowerInvariant()
           "$hash  GermanOSBackup-Setup-x64.exe" | Set-Content ".\SHA256SUMS.txt" -Encoding utf8NoBOM
+      - name: Stage release files
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force ".\release-files" | Out-Null
+          Copy-Item ".\installer\output\GermanOSBackup-Setup-x64.exe" ".\release-files\GermanOSBackup-Setup-x64.exe"
+          Copy-Item ".\SHA256SUMS.txt" ".\release-files\SHA256SUMS.txt"
       - uses: actions/upload-artifact@v4
         with:
           name: GermanOSBackup-release-files
-          path: |
-            .\installer\output\GermanOSBackup-Setup-x64.exe
-            .\SHA256SUMS.txt
+          path: .\release-files\*
           if-no-files-found: error
           retention-days: 90
   release:
