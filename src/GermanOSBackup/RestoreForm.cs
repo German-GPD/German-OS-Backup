@@ -149,8 +149,10 @@ internal sealed class RestoreForm : Form
                         : "";
                 if (!string.IsNullOrWhiteSpace(basePath))
                 {
-                    var remainder = Path.GetRelativePath(parts[0], relative);
-                    return Path.GetFullPath(Path.Combine(basePath, remainder == "." ? "" : remainder));
+                    var remainder = relative.Length > parts[0].Length
+                        ? relative[(parts[0].Length + 1)..]
+                        : "";
+                    return Path.GetFullPath(string.IsNullOrEmpty(remainder) ? basePath : Path.Combine(basePath, remainder));
                 }
             }
         }
