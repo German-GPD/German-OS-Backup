@@ -765,3 +765,93 @@ fn main() -> eframe::Result {
     };
     eframe::run_native("German OS Backup Rust Edition", options, Box::new(|cc| Ok(Box::new(BackupApp::new(cc)))))
 }
+
+
+#[cfg(test)]
+mod regression_tests {
+    use super::*;
+    use std::io::Write;
+
+    fn temp_dir(label: &str) -> PathBuf {
+        let path = std::env::temp_dir().join(format!(
+            "gob-test-{}-{}-{}",
+            label,
+            std::process::id(),
+            SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos()
+        ));
+        fs::create_dir_all(&path).expect("create test directory");
+        path
+    }
+
+    #[test]
+    fn atomic_copy_replaces_old_file_with_complete_content() {
+        let dir = temp_dir("atomic-copy");
+        let source = dir.join("source.bin");
+        let target = dir.join("backup.bin");
+        fs::write(&source, vec![0xA5u8; 256 * 1024]).unwrap();
+        fs::write(&target, b"old backup").unwrap();
+
+        let written = copy_file_atomically(&source, &target, None).unwrap();
+
+        assert_eq!(written, 256 * 1024);
+        assert_eq!(fs::read(&target).unwrap(), fs::read(&source).unwrap());
+        assert!(!dir.read_dir().unwrap().any(|e| {
+            e.ok().map(|e| e.file_name().to_string_lossy().contains(".gob-tmp-")).unwrap_or(false)
+        }));
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn restore_does_not_overwrite_existing_file() {
+        let dir = temp_dir("restore-no-overwrite");
+        let source = dir.join("backup.txt");
+        let target = dir.join("current.txt");
+        fs::write(&source, b"restored").unwrap();
+        fs::write(&target, b"user data").unwrap();
+
+        let restored = restore_file_atomically(&source, &target).unwrap();
+
+        assert!(!restored);
+        assert_eq!(fs::read(&target).unwrap(), b"user data");
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn restore_creates_missing_file_with_exact_content() {
+        let dir = temp_dir("restore-missing");
+        let source = dir.join("backup.txt");
+        let target = dir.join("nested").join("restored.txt");
+        fs::write(&source, b"important save").unwrap();
+
+        assert!(restore_file_atomically(&source, &target).unwrap());
+        assert_eq!(fs::read(&target).unwrap(), b"important save");
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn restore_maps_pictures_folder_from_drive_root_to_profile() {
+        if !cfg!(windows) { return; }
+        let profile = std::env::var("USERPROFILE").expect("Windows user profile");
+        let target = PathBuf::from(std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into()) + "\\\\");
+        let relative = Path::new("Pictures").join("Holiday").join("photo.jpg");
+        let backup = PathBuf::from("D:\\\\Backup\\\\Pictures");
+
+        let actual = restore_destination(&target, &relative, &backup);
+        let expected = PathBuf::from(profile).join("Pictures").join("Holiday").join("photo.jpg");
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn restore_maps_selected_pictures_backup_folder_to_profile() {
+        if !cfg!(windows) { return; }
+        let profile = std::env::var("USERPROFILE").expect("Windows user profile");
+        let target = PathBuf::from(std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into()) + "\\\\");
+        let relative = Path::new("photo.jpg");
+        let backup = PathBuf::from("D:\\\\Backup\\\\Pictures");
+
+        let actual = restore_destination(&target, relative, &backup);
+        let expected = PathBuf::from(profile).join("Pictures").join("photo.jpg");
+        assert_eq!(actual, expected);
+    }
+}
+
