@@ -46,3 +46,10 @@ body{background:linear-gradient(135deg,color-mix(in srgb,var(--green) 9%,transpa
 .btn.green{background:var(--green);border-color:var(--green);color:#0d140f}
 ::selection{background:var(--green);color:#0d140f}
 @media(prefers-reduced-transparency:reduce){.edition-card,.diagram,.setup-band,.safety{backdrop-filter:none;-webkit-backdrop-filter:none}}
+
+/* One product card: unified app, no edition comparison. */
+.single-edition{grid-template-columns:minmax(0,620px);justify-content:center}
+.single-edition .edition-card{width:100%;text-align:left}
+.single-edition .edition-download{background:var(--green);color:#0d140f;border-color:var(--green)}
+.single-edition .edition-download:hover{background:color-mix(in srgb,var(--green) 85%,white)}
+.single-edition .edition-card p{min-height:0}
