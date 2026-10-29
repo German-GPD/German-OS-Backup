@@ -139,7 +139,7 @@ impl BackupApp {
             Err(_) => { self.add_log("Не удалось открыть папку назначения — проверь путь и доступ"); return; }
         };
         let system_drive = std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into());
-        let system_root = PathBuf::from(format!("{}\\", system_drive.trim_end_matches(['\\', '/'])));
+        let system_root = PathBuf::from(format!("{}\\", system_drive.trim_end_matches(&['\\', '/'][..])));
         let dest_text = dest.to_string_lossy().to_lowercase();
         let system_text = system_root.to_string_lossy().to_lowercase();
         if dest_text.starts_with(&system_text) {
