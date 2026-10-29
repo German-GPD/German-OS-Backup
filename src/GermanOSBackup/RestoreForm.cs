@@ -262,14 +262,15 @@ internal sealed class RestoreForm : Form
             var target = Path.GetFullPath(Path.Combine(targetRoot, Path.GetRelativePath(backupRoot, source)));
             return File.Exists(target);
         });
-        var warning = $"Будет восстановлено файлов: {selected.Count:N0}.";
-        if (existingCount > 0) warning += $"\nФайлов с совпадающим путём, которые будут перезаписаны: {existingCount:N0}.";
-        warning += "\n\nИсходные файлы и резервная копия останутся без изменений. Продолжить?";
+        var warning = $"Выбрано файлов: {selected.Count:N0}.";
+        if (existingCount > 0) warning += $"\nУже существуют и будут пропущены: {existingCount:N0}.";
+        warning += "\n\nСуществующие файлы не будут перезаписаны. Продолжить?";
         if (MessageBox.Show(this, warning, "Подтверди восстановление", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
 
         restore.Enabled = false;
         refresh.Enabled = false;
         var copied = 0;
+        var skipped = 0;
         var errors = new List<string>();
         var progress = new Progress<(int Done, int Total, string Current)>(value =>
             status.Text = $"Восстановлено {value.Done:N0} из {value.Total:N0}: {value.Current}");
@@ -286,12 +287,13 @@ internal sealed class RestoreForm : Form
                         var target = Path.GetFullPath(Path.Combine(targetRoot, relative));
                         if (!IsSameOrChild(target, targetRoot))
                             throw new InvalidDataException("Небезопасный путь файла в резервной копии.");
+                        if (File.Exists(target)) { Interlocked.Increment(ref skipped); continue; }
                         Directory.CreateDirectory(Path.GetDirectoryName(target)!);
                         var temp = target + ".gob-restore-tmp";
                         try
                         {
                             File.Copy(source, temp, true);
-                            File.Move(temp, target, true);
+                            File.Move(temp, target, false);
                         }
                         finally { if (File.Exists(temp)) File.Delete(temp); }
                         copied++;
@@ -307,7 +309,8 @@ internal sealed class RestoreForm : Form
             refresh.Enabled = true;
         }
 
-        var summary = $"Успешно восстановлено: {copied:N0} из {selected.Count:N0}.";
+        var summary = $"Восстановлено: {copied:N0} из {selected.Count:N0}.";
+        if (skipped > 0) summary += $"\nПропущено существующих файлов: {skipped:N0}.";
         if (errors.Count > 0)
             summary += $"\nОшибок: {errors.Count:N0}.\n\n" + string.Join("\n", errors.Take(8));
         MessageBox.Show(this, summary, errors.Count == 0 ? "Восстановление завершено" : "Восстановление завершено с ошибками",
@@ -319,7 +322,7 @@ internal sealed class RestoreForm : Form
     {
         var checkedCount = files.Items.Cast<ListViewItem>().Count(item => item.Checked);
         var hasDestination = !string.IsNullOrWhiteSpace(destination.Text) && Directory.Exists(destination.Text);
-        restore.Enabled = !loading && checkedCount > 0 && hasDestination;
+        restore.Enabled = !loading && allFiles.Count > 0 && hasDestination;
         if (allFiles.Count == 0)
             status.Text = "Резервная копия пуста — сначала создай копию файлов.";
         else if (!hasDestination)
