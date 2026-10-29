@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - 'src/**'
+      - 'dashboard.html'
       - 'native-engine/**'
       - 'installer/**'
       - 'version.txt'
