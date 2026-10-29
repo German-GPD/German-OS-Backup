@@ -837,6 +837,7 @@ impl winit::application::ApplicationHandler for WebUiHost {
         let sender = self.sender.clone();
         let init_script = r#"window.chrome = window.chrome || {}; window.chrome.webview = window.chrome.webview || { postMessage: function(message) { window.ipc.postMessage(typeof message === 'string' ? message : JSON.stringify(message)); } };"#;
         let webview = match wry::WebViewBuilder::new()
+            .with_transparent(true)
             .with_html(include_str!("../dashboard.html"))
             .with_initialization_script(init_script)
             .with_ipc_handler(move |request| {
