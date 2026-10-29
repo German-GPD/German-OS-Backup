@@ -12,6 +12,8 @@ path = "src-rust/main.rs"
 
 [dependencies]
 eframe = { version = "0.31", default-features = false, features = ["default_fonts", "glow", "wayland", "x11"] }
+wry = "0.57"
+winit = "0.30"
 rfd = "0.15"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
