@@ -30,7 +30,7 @@ internal static class Program
                     Destination = Path.GetFullPath(setup.Destination),
                     FirstRunComplete = true,
                     StartWithWindows = setup.StartWithWindows,
-                    SelectedSources = BackupEngine.Sources().Where(x => Directory.Exists(x.Path)).Select(x => x.Path).ToList()
+                    SelectedSources = BackupEngine.DefaultSources().ToList()
                 };
                 SaveConfig(config);
 
@@ -48,7 +48,7 @@ internal static class Program
             ValidateDestination(config!.Destination);
             if (config.SelectedSources is not { Count: > 0 })
             {
-                config.SelectedSources = BackupEngine.Sources().Where(x => Directory.Exists(x.Path)).Select(x => x.Path).ToList();
+                config.SelectedSources = BackupEngine.DefaultSources().ToList();
                 SaveConfig(config);
             }
 
