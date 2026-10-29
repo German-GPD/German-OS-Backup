@@ -26,6 +26,8 @@ struct Config {
     sources: Vec<String>,
     #[serde(rename = "PerformanceMode", alias = "performance_mode", default = "default_mode")]
     performance_mode: String,
+    #[serde(rename = "AutoUpdateSources", alias = "auto_update_sources", default)]
+    auto_update_sources: Vec<String>,
 }
 fn default_mode() -> String { "balanced".into() }
 impl Default for Config {
@@ -68,6 +70,7 @@ struct BackupApp {
     last_stats: Stats,
     last_tick: std::time::Instant,
     log: Vec<String>,
+    watcher_cancel: Arc<AtomicBool>,
 }
 impl BackupApp {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
@@ -93,12 +96,14 @@ impl BackupApp {
         let config = fs::read_to_string(&config_path)
             .ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
         let stats = Arc::new(Mutex::new(Stats { status: "Готово к работе".into(), ..Default::default() }));
-        Self { config, config_path, stats, cancel: Arc::new(AtomicBool::new(false)),
+        let mut app = Self { config, config_path, stats, cancel: Arc::new(AtomicBool::new(false)),
             system: System::new(), cpu: 0.0, memory: 0.0, memory_used: 0, memory_total: 0,
             last_stats: Stats::default(), last_tick: std::time::Instant::now(), log: vec![
                 format!("German OS Backup Rust Edition {VERSION} запущен"),
                 "Данные хранятся локально; телеметрии нет".into()
-            ] }
+            ], watcher_cancel: Arc::new(AtomicBool::new(false)) };
+        app.restart_auto_watchers();
+        app
     }
 
     fn save_config(&mut self) {
@@ -119,6 +124,90 @@ impl BackupApp {
     fn add_log(&mut self, line: impl Into<String>) {
         self.log.push(line.into());
         if self.log.len() > 8 { self.log.remove(0); }
+    }
+
+    fn restart_auto_watchers(&mut self) {
+        self.watcher_cancel.store(true, Ordering::SeqCst);
+        let cancel = Arc::new(AtomicBool::new(false));
+        self.watcher_cancel = cancel.clone();
+        let sources = self.config.sources.iter()
+            .filter(|s| self.config.auto_update_sources.iter().any(|a| a.eq_ignore_ascii_case(s)))
+            .cloned().collect::<Vec<_>>();
+        let destination = self.config.destination.clone();
+        let stats = self.stats.clone();
+        if sources.is_empty() || destination.trim().is_empty() { return; }
+        thread::spawn(move || {
+            use notify::{RecommendedWatcher, RecursiveMode, Watcher};
+            use std::sync::mpsc::{channel, RecvTimeoutError};
+            let (tx, rx) = channel();
+            let mut watcher: RecommendedWatcher = match notify::recommended_watcher(move |event| { let _ = tx.send(event); }) {
+                Ok(w) => w,
+                Err(_) => { if let Ok(mut s) = stats.lock() { s.status = "Не удалось запустить динамическое отслеживание".into(); } return; }
+            };
+            for source in &sources {
+                if Path::new(source).is_dir() && watcher.watch(Path::new(source), RecursiveMode::Recursive).is_err() {
+                    if let Ok(mut s) = stats.lock() { s.errors += 1; s.status = format!("Не удалось отслеживать: {source}"); }
+                }
+            }
+            let mut pending: Vec<PathBuf> = Vec::new();
+            while !cancel.load(Ordering::SeqCst) {
+                match rx.recv_timeout(Duration::from_millis(300)) {
+                    Ok(Ok(event)) => {
+                        use notify::EventKind;
+                        if matches!(event.kind, EventKind::Remove(_)) { continue; } // Keep the last backup when the original is deleted.
+                        for path in event.paths {
+                            if !pending.iter().any(|p| p == &path) { pending.push(path); }
+                        }
+                    },
+                    Ok(Err(_)) => continue,
+                    Err(RecvTimeoutError::Timeout) => {},
+                    Err(RecvTimeoutError::Disconnected) => break,
+                }
+                if pending.is_empty() { continue; }
+                let batch = std::mem::take(&mut pending);
+                for path in batch {
+                    if cancel.load(Ordering::SeqCst) { break; }
+                    let Some((source, relative)) = sources.iter().find_map(|source| {
+                        path.strip_prefix(source).ok().map(|relative| (source, relative.to_path_buf()))
+                    }) else { continue; };
+                    let source_path = Path::new(source);
+                    let target_root = Path::new(&destination).join(source_path.file_name().unwrap_or_default());
+                    let target = target_root.join(relative);
+                    if path.is_dir() {
+                        let _ = fs::create_dir_all(&target);
+                        continue;
+                    }
+                    if !path.is_file() { continue; }
+                    if stats.lock().map(|s| s.running).unwrap_or(true) {
+                        pending.push(path);
+                        thread::sleep(Duration::from_millis(250));
+                        continue;
+                    }
+                    let before = match fs::metadata(&path) { Ok(m) => m, Err(_) => continue };
+                    thread::sleep(Duration::from_millis(350));
+                    let after = match fs::metadata(&path) { Ok(m) => m, Err(_) => continue };
+                    if before.len() != after.len() || before.modified().ok() != after.modified().ok() {
+                        pending.push(path);
+                        continue;
+                    }
+                    if let Some(parent) = target.parent() { if fs::create_dir_all(parent).is_err() { continue; } }
+                    let temp = target.with_extension(format!("gob-auto-{}.tmp", std::process::id()));
+                    if fs::copy(&path, &temp).is_ok() {
+                        let _ = fs::remove_file(&target);
+                        if fs::rename(&temp, &target).is_ok() {
+                            if let Ok(modified) = after.modified() {
+                                let _ = filetime::set_file_mtime(&target, filetime::FileTime::from_system_time(modified));
+                            }
+                            if let Ok(mut s) = stats.lock() {
+                                s.files_copied += 1;
+                                s.bytes_copied += after.len();
+                                s.status = format!("Автообновлено: {}", path.display());
+                            }
+                        } else { let _ = fs::remove_file(temp); }
+                    }
+                }
+            }
+        });
     }
 
     fn start_backup(&mut self) {
@@ -408,7 +497,7 @@ impl eframe::App for BackupApp {
             } else if self.config.sources.is_empty() {
                 "ДОБАВЬ ИСТОЧНИКИ · выбери папки, которые нужно сохранить"
             } else {
-                "ГОТОВО К КОПИРОВАНИЮ · проверь путь назначения и нажми «Начать копирование»"
+                "ГОТОВО · ручное копирование и автообновление по выбранным папкам"
             };
             panel(ui, "БЫСТРАЯ НАСТРОЙКА", |ui| {
                 ui.label(RichText::new(setup_hint).color(if self.config.destination.is_empty() || self.config.sources.is_empty() { Color32::from_rgb(244, 202, 120) } else { green }).size(11.0).strong());
@@ -439,19 +528,36 @@ impl eframe::App for BackupApp {
             ui.add_space(10.0);
             panel(ui, "ПАПКИ ДЛЯ КОПИРОВАНИЯ", |ui| {
                 let mut remove = None;
+                let mut toggle_auto: Option<String> = None;
                 for (i, path) in self.config.sources.iter().enumerate() {
                     ui.horizontal(|ui| {
                         ui.label(RichText::new("DIR").color(green).monospace().size(10.0));
                         ui.label(RichText::new(path).color(Color32::WHITE).size(12.0));
+                        let enabled = self.config.auto_update_sources.iter().any(|p| p.eq_ignore_ascii_case(path));
+                        if ui.small_button(if enabled { "Авто: вкл." } else { "Авто: выкл." }).clicked() { toggle_auto = Some(path.clone()); }
                         if ui.small_button("Убрать").clicked() { remove = Some(i); }
                     });
                 }
-                if let Some(i) = remove { self.config.sources.remove(i); self.save_config(); }
+                if let Some(path) = toggle_auto {
+                    if let Some(index) = self.config.auto_update_sources.iter().position(|p| p.eq_ignore_ascii_case(&path)) {
+                        self.config.auto_update_sources.remove(index);
+                    } else {
+                        self.config.auto_update_sources.push(path);
+                    }
+                    self.save_config();
+                    self.restart_auto_watchers();
+                }
+                if let Some(i) = remove {
+                    let removed = self.config.sources.remove(i);
+                    self.config.auto_update_sources.retain(|p| !p.eq_ignore_ascii_case(&removed));
+                    self.save_config();
+                    self.restart_auto_watchers();
+                }
                 ui.horizontal(|ui| {
                     if ui.button("+ Добавить папку").clicked() {
                         if let Some(path) = rfd::FileDialog::new().set_title("Добавить папку-источник").pick_folder() {
                             let value = path.to_string_lossy().to_string();
-                            if !self.config.sources.iter().any(|s| Path::new(s) == path) { self.config.sources.push(value); self.save_config(); }
+                            if !self.config.sources.iter().any(|s| Path::new(s) == path) { self.config.sources.push(value); self.save_config(); self.restart_auto_watchers(); }
                         }
                     }
                     ui.label(RichText::new(format!("{} источников", self.config.sources.len())).color(muted).size(11.0));
