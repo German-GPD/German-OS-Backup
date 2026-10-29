@@ -76,39 +76,6 @@ struct BackupApp {
     watcher_cancel: Arc<AtomicBool>,
 }
 impl BackupApp {
-    fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        let mut style = (*cc.egui_ctx.style()).clone();
-        style.visuals = egui::Visuals::dark();
-        style.visuals.panel_fill = Color32::from_rgb(13, 16, 15);
-        style.visuals.window_fill = Color32::from_rgb(17, 21, 18);
-        style.visuals.widgets.noninteractive.bg_fill = Color32::from_rgb(19, 24, 21);
-        style.visuals.widgets.inactive.bg_fill = Color32::from_rgb(25, 31, 27);
-        style.visuals.widgets.hovered.bg_fill = Color32::from_rgb(34, 45, 37);
-        style.visuals.widgets.active.bg_fill = Color32::from_rgb(45, 70, 51);
-        style.visuals.selection.bg_fill = Color32::from_rgb(105, 190, 124);
-        style.visuals.widgets.noninteractive.corner_radius = egui::CornerRadius::same(2);
-        style.visuals.widgets.inactive.corner_radius = egui::CornerRadius::same(2);
-        style.visuals.widgets.hovered.corner_radius = egui::CornerRadius::same(2);
-        style.visuals.widgets.active.corner_radius = egui::CornerRadius::same(2);
-        style.spacing.item_spacing = Vec2::new(10.0, 9.0);
-        cc.egui_ctx.set_style(style);
-
-        // Keep the same per-user config location as the previous C# version.
-        let local_app_data = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| ".".into());
-        let config_path = PathBuf::from(local_app_data).join("GermanOSBackup-Rust").join("config.json");
-        let config = fs::read_to_string(&config_path)
-            .ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
-        let stats = Arc::new(Mutex::new(Stats { status: "Готово к работе".into(), ..Default::default() }));
-        let mut app = Self { config, config_path, stats, cancel: Arc::new(AtomicBool::new(false)),
-            system: System::new(), cpu: 0.0, memory: 0.0, memory_used: 0, memory_total: 0,
-            last_stats: Stats::default(), last_tick: std::time::Instant::now(), log: vec![
-                format!("German OS Backup Rust Edition {VERSION} запущен"),
-                "Данные хранятся локально; телеметрии нет".into()
-            ], watcher_cancel: Arc::new(AtomicBool::new(false)) };
-        app.restart_auto_watchers();
-        app
-    }
-
     fn new_webview() -> Self {
         let local_app_data = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| ".".into());
         let config_path = PathBuf::from(local_app_data)
