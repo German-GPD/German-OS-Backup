@@ -656,7 +656,9 @@ fn restore_file_atomically(source: &Path, target: &Path) -> io::Result<bool> {
     let temp = unique_sibling_path(target, "restore-tmp");
     let result = (|| {
         fs::copy(source, &temp)?;
-        match fs::hard_link(&temp, target) {
+        // This application targets Windows: rename on the same volume is
+        // atomic and fails rather than replacing an existing destination.
+        match fs::rename(&temp, target) {
             Ok(()) => Ok(true),
             Err(error) if error.kind() == io::ErrorKind::AlreadyExists => Ok(false),
             Err(error) => Err(error),
@@ -672,8 +674,11 @@ fn restore_destination(target: &Path, relative: &Path) -> PathBuf {
         return target.join(relative);
     };
     let root_name = root.to_string_lossy();
-    let is_drive_root = target.file_name().is_none();
-    if is_drive_root {
+    let target_text = target.to_string_lossy();
+    let profile_root = std::env::var("USERPROFILE").unwrap_or_default();
+    let is_restore_root = target.file_name().is_none()
+        || (!profile_root.is_empty() && target_text.eq_ignore_ascii_case(&profile_root));
+    if is_restore_root {
         let folder = match root_name.to_lowercase().as_str() {
             "desktop" | "рабочий стол" => Some("Desktop"),
             "documents" | "документы" => Some("Documents"),
