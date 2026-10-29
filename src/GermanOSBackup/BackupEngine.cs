@@ -73,6 +73,7 @@ internal sealed class BackupEngine : IDisposable
             Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             Path.Combine(home, "AppData", "LocalLow"),
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             Environment.GetFolderPath(Environment.SpecialFolder.SavedGames)
         };
         return candidates
@@ -399,6 +400,8 @@ internal sealed class BackupEngine : IDisposable
                         File.SetLastWriteTimeUtc(target, src.LastWriteTimeUtc);
                         Interlocked.Increment(ref stats.FilesCopied);
                         Interlocked.Add(ref stats.BytesCopied, src.Length);
+                        Interlocked.Add(ref bytesInWindow, src.Length);
+                        UpdateSpeed();
                         return;
                     }
                     temp = target + ".gob-tmp-" + Environment.ProcessId + "-" + Guid.NewGuid().ToString("N");
