@@ -32,7 +32,7 @@ internal sealed class DashboardForm : Form
         ClientSize = new Size(1180, 820);
         MinimumSize = new Size(900, 680);
         StartPosition = FormStartPosition.CenterScreen;
-        BackColor = Color.FromArgb(13, 16, 15);
+        BackColor = Color.FromArgb(5, 6, 5);
         Font = new Font("Segoe UI", 10F);
 
         var menu = new ContextMenuStrip();
@@ -508,23 +508,9 @@ internal sealed class DashboardForm : Form
         base.OnFormClosed(e);
     }
 
-    private static readonly string SystemAccentHex = GetSystemAccentHex();
+    private static readonly string SystemAccentHex = "#43ff78";
 
-    private static string GetSystemAccentHex()
-    {
-        try
-        {
-            var value = Registry.GetValue(
-                @"HKEY_CURRENT_USER\Software\Microsoft\Windows\DWM",
-                "AccentColor", null);
-            if (value is int color)
-                return "#" + (color & 0xFF).ToString("X2") +
-                    ((color >> 8) & 0xFF).ToString("X2") +
-                    ((color >> 16) & 0xFF).ToString("X2");
-        }
-        catch { }
-        return "#9bf0b0";
-    }
+    private static string GetSystemAccentHex() => "#43ff78";
 
     private void ApplyMicaBackdrop()
     {
