@@ -66,7 +66,7 @@ internal sealed class DashboardForm : Form
                 (_, _) =>
                 {
                     if (IsDisposed || Disposing) return;
-                    try { BeginInvoke(ShowWindow); } catch { }
+                    try { BeginInvoke((Action)ShowWindow); } catch { }
                 },
                 null,
                 Timeout.Infinite,
