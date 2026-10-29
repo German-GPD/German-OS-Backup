@@ -1,27 +1,14 @@
-name: Build unified German OS Backup
+name: German OS Backup CI
 on:
   push:
     branches: [main]
-    paths:
-      - 'src/**'
-      - 'dashboard.html'
-      - 'native-engine/**'
-      - 'installer/**'
-      - 'version.txt'
-      - '.github/workflows/build.yml'
   pull_request:
     branches: [main]
-    paths:
-      - 'src/**'
-      - 'native-engine/**'
-      - 'installer/**'
-      - 'version.txt'
-      - '.github/workflows/build.yml'
   workflow_dispatch:
 permissions:
-  contents: write
+  contents: read
 concurrency:
-  group: unified-build-${{ github.ref }}
+  group: backup-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   build:
@@ -33,21 +20,29 @@ jobs:
         shell: pwsh
         run: |
           $v = (Get-Content version.txt -Raw).Trim()
+          if ($v -notmatch '^\d+\.\d+\.\d+$') { throw "Invalid version.txt: $v" }
           "version=$v" >> $env:GITHUB_OUTPUT
+      - name: Audit repository consistency
+        shell: pwsh
+        run: .\scripts\repository-audit.ps1
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-pc-windows-msvc
+      - name: Check Rust formatting
+        run: cargo fmt --manifest-path .\native-engine\Cargo.toml -- --check
+      - name: Test Rust backup engine
+        run: cargo test --manifest-path .\native-engine\Cargo.toml --target x86_64-pc-windows-msvc
+      - name: Run Rust static analysis
+        run: cargo clippy --manifest-path .\native-engine\Cargo.toml --all-targets --target x86_64-pc-windows-msvc -- -D warnings
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
-      - name: Restore and build
+      - name: Restore .NET dependencies
         run: dotnet restore .\src\GermanOSBackup\GermanOSBackup.csproj
-      - name: Test Rust backup engine
-        run: cargo test --manifest-path .\native-engine\Cargo.toml --target x86_64-pc-windows-msvc
-      - name: Build native Rust engine
-        run: cargo build --manifest-path .\native-engine\Cargo.toml --release --target x86_64-pc-windows-msvc
-      - name: Publish single Windows application
+      - name: Build .NET application
+        run: dotnet build .\src\GermanOSBackup\GermanOSBackup.csproj -c Release --no-restore
+      - name: Publish Windows x64 application
         run: dotnet publish .\src\GermanOSBackup\GermanOSBackup.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:Version=${{ steps.version.outputs.version }} -o .\publish
       - name: Bundle Rust engine
         shell: pwsh
@@ -65,7 +60,7 @@ jobs:
           }
       - name: Install Inno Setup
         run: choco install innosetup --yes --no-progress
-      - name: Package one installer
+      - name: Package installer
         run: iscc /DAppVersion=${{ steps.version.outputs.version }} .\installer\GermanOSBackup.iss
       - name: Verify installer and create checksum
         shell: pwsh
@@ -73,29 +68,44 @@ jobs:
           $installer = ".\installer\output\GermanOSBackup-Setup-x64.exe"
           if (!(Test-Path $installer)) { throw "Installer missing: $installer" }
           $hash = (Get-FileHash -Algorithm SHA256 $installer).Hash.ToLowerInvariant()
-          "$hash  GermanOSBackup-Setup-x64.exe" | Set-Content ".\SHA256SUMS.txt" -Encoding utf8
+          "$hash  GermanOSBackup-Setup-x64.exe" | Set-Content ".\SHA256SUMS.txt" -Encoding utf8NoBOM
       - uses: actions/upload-artifact@v4
         with:
-          name: GermanOSBackup-Setup-x64
+          name: GermanOSBackup-release-files
           path: |
             .\installer\output\GermanOSBackup-Setup-x64.exe
             .\SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 90
+  release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read version
+        id: version
+        shell: bash
+        run: echo "version=$(tr -d '\r\n' < version.txt)" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@v4
+        with:
+          name: GermanOSBackup-release-files
+          path: release-files
       - name: Publish release
-        if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.version }}
           target_commitish: main
           name: German OS Backup ${{ steps.version.outputs.version }}
           body: |
-            Единая версия German OS Backup для Windows x64.
-            SHA256SUMS.txt содержит контрольную сумму установщика.
-            Установщик не подписан Authenticode; Windows SmartScreen может предупредить о неизвестном издателе.
+            German OS Backup for Windows x64.
+            SHA256SUMS.txt contains the SHA-256 checksum of the installer.
+            The installer is not Authenticode-signed; Windows SmartScreen may warn about an unknown publisher.
           files: |
-            installer/output/GermanOSBackup-Setup-x64.exe
-            SHA256SUMS.txt
+            release-files/GermanOSBackup-Setup-x64.exe
+            release-files/SHA256SUMS.txt
           overwrite_files: true
           make_latest: true
           fail_on_unmatched_files: true

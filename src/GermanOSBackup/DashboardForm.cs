@@ -87,10 +87,19 @@ internal sealed class DashboardForm : Form
                 web.DefaultBackgroundColor = Color.Transparent;
                 web.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
                 web.CoreWebView2.Settings.AreDevToolsEnabled = false;
+                web.CoreWebView2.NavigationStarting += (_, args) =>
+                {
+                    // The dashboard is embedded HTML. It must never navigate to remote
+                    // content that could send privileged WebView messages to the host app.
+                    if (!string.Equals(args.Uri, "about:blank", StringComparison.OrdinalIgnoreCase))
+                        args.Cancel = true;
+                };
                 web.CoreWebView2.WebMessageReceived += async (_, args) =>
                 {
                     try
                     {
+                        if (!string.Equals(args.Source, "about:blank", StringComparison.OrdinalIgnoreCase))
+                            return;
                         using var json = JsonDocument.Parse(args.WebMessageAsJson);
                         var action = json.RootElement.TryGetProperty("action", out var value) ? value.GetString() : "";
                         await HandleActionAsync(action ?? "", json.RootElement);
