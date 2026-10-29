@@ -39,7 +39,12 @@ impl Default for Config {
             let p = home.join(name);
             if p.is_dir() { sources.push(p.to_string_lossy().to_string()); }
         }
-        Self { destination: String::new(), sources, performance_mode: "balanced".into() }
+        Self {
+            destination: String::new(),
+            sources,
+            performance_mode: "balanced".into(),
+            auto_update_sources: Vec::new(),
+        }
     }
 }
 
@@ -199,19 +204,20 @@ impl BackupApp {
                         continue;
                     }
                     if let Some(parent) = target.parent() { if fs::create_dir_all(parent).is_err() { continue; } }
-                    let temp = target.with_extension(format!("gob-auto-{}.tmp", std::process::id()));
-                    if fs::copy(&path, &temp).is_ok() {
-                        let _ = fs::remove_file(&target);
-                        if fs::rename(&temp, &target).is_ok() {
-                            if let Ok(modified) = after.modified() {
-                                let _ = filetime::set_file_mtime(&target, filetime::FileTime::from_system_time(modified));
-                            }
+                    match copy_file_atomically(&path, &target, after.modified().ok()) {
+                        Ok(written) => {
                             if let Ok(mut s) = stats.lock() {
                                 s.files_copied += 1;
-                                s.bytes_copied += after.len();
+                                s.bytes_copied += written;
                                 s.status = format!("Автообновлено: {}", path.display());
                             }
-                        } else { let _ = fs::remove_file(temp); }
+                        }
+                        Err(error) => {
+                            if let Ok(mut s) = stats.lock() {
+                                s.errors += 1;
+                                s.status = format!("Ошибка автообновления {}: {error}", path.display());
+                            }
+                        }
                     }
                 }
             }
@@ -310,19 +316,19 @@ impl BackupApp {
                     let same = fs::metadata(&target).ok().map(|m| m.len() == source_meta.len() && m.modified().ok() == source_meta.modified().ok()).unwrap_or(false);
                     if same { if let Ok(mut s) = stats.lock() { s.files_skipped += 1; } continue; }
                     if let Some(parent) = target.parent() { if fs::create_dir_all(parent).is_err() { if let Ok(mut s) = stats.lock() { s.errors += 1; } continue; } }
-                    match fs::copy(path, &target) {
+                    match copy_file_atomically(path, &target, source_meta.modified().ok()) {
                         Ok(n) => {
-                            if let Ok(modified) = source_meta.modified() {
-                                if filetime::set_file_mtime(&target, filetime::FileTime::from_system_time(modified)).is_err() {
-                                    if let Ok(mut s) = stats.lock() { s.errors += 1; }
-                                }
-                            }
                             total_bytes += n; window_bytes += n;
                             if let Ok(mut s) = stats.lock() { s.files_copied += 1; s.bytes_copied = total_bytes; }
                             if performance_mode == "eco" { thread::sleep(Duration::from_millis(25)); }
                             else if performance_mode == "balanced" { thread::sleep(Duration::from_millis(2)); }
                         },
-                        Err(_) => if let Ok(mut s) = stats.lock() { s.errors += 1; },
+                        Err(error) => {
+                            if let Ok(mut s) = stats.lock() {
+                                s.errors += 1;
+                                s.status = format!("Ошибка копирования {}: {error}", path.display());
+                            }
+                        }
                     }
                     if last_speed.elapsed() >= Duration::from_secs(1) {
                         if let Ok(mut s) = stats.lock() { s.speed = window_bytes / last_speed.elapsed().as_secs().max(1); }
@@ -413,7 +419,11 @@ impl BackupApp {
                 let out = restore_destination(&target, rel);
                 if out.exists() { skipped += 1; continue; }
                 if let Some(parent) = out.parent() { if fs::create_dir_all(parent).is_err() { errors += 1; continue; } }
-                match fs::copy(entry.path(), &out) { Ok(_) => restored += 1, Err(_) => errors += 1 }
+                match restore_file_atomically(entry.path(), &out) {
+                    Ok(true) => restored += 1,
+                    Ok(false) => skipped += 1,
+                    Err(_) => errors += 1,
+                }
             }
             if let Ok(mut s) = stats.lock() {
                 s.running = false; s.cancellable = false;
@@ -605,6 +615,56 @@ impl eframe::App for BackupApp {
     }
 }
 
+
+fn unique_sibling_path(path: &Path, tag: &str) -> PathBuf {
+    let nonce = SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default().as_nanos();
+    let file_name = path.file_name().unwrap_or_default().to_string_lossy();
+    path.with_file_name(format!("{file_name}.gob-{tag}-{}-{nonce}", std::process::id()))
+}
+
+// Copy to a sibling temporary file first. The existing backup is moved aside
+// before replacement, and restored if the final rename fails. A cancelled or
+// interrupted copy therefore never truncates the last good backup in place.
+fn copy_file_atomically(source: &Path, target: &Path, modified: Option<SystemTime>) -> io::Result<u64> {
+    if let Some(parent) = target.parent() { fs::create_dir_all(parent)?; }
+    let temp = unique_sibling_path(target, "tmp");
+    let backup = unique_sibling_path(target, "previous");
+    let result = (|| {
+        let written = fs::copy(source, &temp)?;
+        if let Some(time) = modified {
+            filetime::set_file_mtime(&temp, filetime::FileTime::from_system_time(time))?;
+        }
+        let had_target = target.exists();
+        if had_target { fs::rename(target, &backup)?; }
+        if let Err(error) = fs::rename(&temp, target) {
+            if had_target { let _ = fs::rename(&backup, target); }
+            return Err(error);
+        }
+        if had_target { let _ = fs::remove_file(&backup); }
+        Ok(written)
+    })();
+    if temp.exists() { let _ = fs::remove_file(&temp); }
+    result
+}
+
+// Restore must never overwrite an existing file. Linking the completed temp
+// file into place is atomic and fails safely if another process creates target.
+fn restore_file_atomically(source: &Path, target: &Path) -> io::Result<bool> {
+    if target.exists() { return Ok(false); }
+    if let Some(parent) = target.parent() { fs::create_dir_all(parent)?; }
+    let temp = unique_sibling_path(target, "restore-tmp");
+    let result = (|| {
+        fs::copy(source, &temp)?;
+        match fs::hard_link(&temp, target) {
+            Ok(()) => Ok(true),
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => Ok(false),
+            Err(error) => Err(error),
+        }
+    })();
+    let _ = fs::remove_file(&temp);
+    result
+}
 
 fn restore_destination(target: &Path, relative: &Path) -> PathBuf {
     let mut components = relative.components();
