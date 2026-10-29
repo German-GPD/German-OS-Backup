@@ -125,9 +125,12 @@ internal sealed class RestoreForm : Form
     {
         var normalizedTarget = NormalizeDirectoryPath(target);
         var root = Path.GetPathRoot(normalizedTarget);
-        // When a drive root is selected, map standard backup roots back to the
-        // actual Windows Known Folder. This avoids creating C:\\Изображения, etc.
-        if (string.Equals(normalizedTarget, root, StringComparison.OrdinalIgnoreCase))
+        var profile = NormalizeDirectoryPath(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
+        // When a drive root or the user-profile root is selected, map standard
+        // backup roots back to Windows Known Folders instead of creating fake
+        // folders such as C:\\Изображения.
+        if (string.Equals(normalizedTarget, root, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(normalizedTarget, profile, StringComparison.OrdinalIgnoreCase))
         {
             var parts = relative.Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, 2,
                 StringSplitOptions.RemoveEmptyEntries);
