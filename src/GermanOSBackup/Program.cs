@@ -39,7 +39,7 @@ internal static class Program
                     if (sources.ShowDialog() != DialogResult.OK)
                     {
                         File.Delete(ConfigPath);
-                        MessageBox.Show("Настройка не завершена. При следующем запуске мастер откроется снова.", "German OS Backup C# Edition", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        MessageBox.Show("Настройка не завершена. При следующем запуске мастер откроется снова.", "German OS Backup", MessageBoxButtons.OK, MessageBoxIcon.Information);
                         return;
                     }
                 }
@@ -61,7 +61,7 @@ internal static class Program
         catch (Exception ex)
         {
             try { File.AppendAllText(LogPath, $"[{DateTime.Now:O}] FATAL {ex}{Environment.NewLine}"); } catch { }
-            MessageBox.Show($"German OS Backup C# Edition не смог запуститься. Подробности: {LogPath}", "German OS Backup C# Edition", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show($"German OS Backup не смог запуститься. Подробности: {LogPath}", "German OS Backup", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 
