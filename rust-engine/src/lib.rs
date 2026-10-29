@@ -50,3 +50,44 @@ pub unsafe extern "C" fn gob_copy_file(
         }
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::gob_copy_file;
+    use std::{
+        ffi::CString,
+        fs,
+        time::{SystemTime, UNIX_EPOCH},
+    };
+
+    #[test]
+    fn copies_file_and_reports_byte_count() {
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock must be after Unix epoch")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "gob-rust-engine-test-{}-{stamp}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&root).expect("create test directory");
+        let source_path = root.join("source-save.dat");
+        let target_path = root.join("nested").join("backup-save.dat");
+        let payload = b"German OS Backup Rust core test payload";
+        fs::write(&source_path, payload).expect("write source");
+
+        let source = CString::new(source_path.to_string_lossy().as_bytes()).expect("source path");
+        let target = CString::new(target_path.to_string_lossy().as_bytes()).expect("target path");
+        let mut copied = 0_u64;
+        // SAFETY: both paths are valid NUL-terminated strings and copied is writable.
+        let result = unsafe {
+            gob_copy_file(source.as_ptr(), target.as_ptr(), &mut copied as *mut u64)
+        };
+
+        assert_eq!(result, 0, "copy must succeed");
+        assert_eq!(copied, payload.len() as u64);
+        assert_eq!(fs::read(&target_path).expect("read target"), payload);
+        let _ = fs::remove_dir_all(root);
+    }
+}
