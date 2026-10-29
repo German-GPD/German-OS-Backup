@@ -326,6 +326,7 @@ internal sealed class RestoreForm : Form
                         try
                         {
                             File.Copy(source, temp, true);
+                            File.SetLastWriteTimeUtc(temp, File.GetLastWriteTimeUtc(source));
                             File.Move(temp, target, false);
                         }
                         finally { if (File.Exists(temp)) File.Delete(temp); }
