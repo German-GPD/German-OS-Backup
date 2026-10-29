@@ -502,6 +502,11 @@ internal sealed class BackupEngine : IDisposable
                     var src = new FileInfo(source);
                     src.Refresh();
                     if (!src.Exists) return; // A deleted source must never delete the last good backup.
+                    if ((File.GetAttributes(source) & FileAttributes.ReparsePoint) != 0)
+                    {
+                        Log($"Пропущена символическая ссылка: {source}");
+                        return;
+                    }
                     var sourceLength = src.Length;
                     var sourceLastWriteUtc = src.LastWriteTimeUtc;
 
