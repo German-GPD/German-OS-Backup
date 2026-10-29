@@ -500,7 +500,7 @@ internal sealed class BackupEngine : IDisposable
                 try
                 {
                     var src = new FileInfo(source); if (!src.Exists) return;
-                    if (File.Exists(target)) { var dst = new FileInfo(target); if (dst.Length == src.Length && dst.LastWriteTimeUtc >= src.LastWriteTimeUtc) return; }
+                    if (File.Exists(target)) { var dst = new FileInfo(target); if (dst.Length == src.Length && dst.LastWriteTimeUtc == src.LastWriteTimeUtc) return; }
                     Directory.CreateDirectory(Path.GetDirectoryName(target)!);
                     if (mode != "eco" && src.Length <= 64L * 1024 * 1024 && await Task.Run(() => RustCopyEngine.TryCopy(source, target), ct).ConfigureAwait(false))
                     {
