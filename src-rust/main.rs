@@ -435,7 +435,7 @@ impl BackupApp {
                 // If the user selects a drive root (e.g. C:\\), restore known Windows
                 // profile folders to their actual user-folder locations instead of
                 // creating C:\\Изображения, C:\\Документы, etc.
-                let out = restore_destination(&target, rel);
+                let out = restore_destination(&target, rel, &backup);
                 if out.exists() { skipped += 1; continue; }
                 if let Some(parent) = out.parent() { if fs::create_dir_all(parent).is_err() { errors += 1; continue; } }
                 match restore_file_atomically(entry.path(), &out) {
@@ -688,32 +688,52 @@ fn restore_file_atomically(source: &Path, target: &Path) -> io::Result<bool> {
     result
 }
 
-fn restore_destination(target: &Path, relative: &Path) -> PathBuf {
+fn restore_destination(target: &Path, relative: &Path, backup_root: &Path) -> PathBuf {
     let mut components = relative.components();
     let Some(std::path::Component::Normal(root)) = components.next() else {
         return target.join(relative);
     };
     let root_name = root.to_string_lossy();
-    let target_text = target.to_string_lossy();
-    let profile_root = std::env::var("USERPROFILE").unwrap_or_default();
-    let is_restore_root = target.file_name().is_none()
-        || (!profile_root.is_empty() && target_text.eq_ignore_ascii_case(&profile_root));
-    if is_restore_root {
-        let folder = match root_name.to_lowercase().as_str() {
+    let is_known_folder = |name: &str| -> Option<&'static str> {
+        match name.to_lowercase().as_str() {
             "desktop" | "рабочий стол" => Some("Desktop"),
             "documents" | "документы" => Some("Documents"),
             "pictures" | "изображения" | "рисунки" => Some("Pictures"),
             "videos" | "видео" => Some("Videos"),
             "downloads" | "загрузки" => Some("Downloads"),
             _ => None,
-        };
-        if let (Some(folder), Ok(profile)) = (folder, std::env::var("USERPROFILE")) {
-            let mut output = PathBuf::from(profile).join(folder);
-            for component in components { output.push(component.as_os_str()); }
-            return output;
         }
-    }
-    target.join(relative)
+    };
+
+    let target_text = target.to_string_lossy();
+    let profile_root = std::env::var("USERPROFILE").unwrap_or_default();
+    let is_restore_root = target.file_name().is_none()
+        || (!profile_root.is_empty() && target_text.eq_ignore_ascii_case(&profile_root));
+    if !is_restore_root { return target.join(relative); }
+
+    let (folder, remainder) = if let Some(folder) = is_known_folder(&root_name) {
+        let remainder = relative.strip_prefix(root).unwrap_or(Path::new(""));
+        (folder, remainder)
+    } else if let Some(name) = backup_root.file_name().map(|n| n.to_string_lossy()) {
+        if let Some(folder) = is_known_folder(&name) {
+            (folder, relative)
+        } else {
+            return target.join(relative);
+        }
+    } else {
+        return target.join(relative);
+    };
+
+    let profile = std::env::var("USERPROFILE").unwrap_or_default();
+    let base = match folder {
+        "Desktop" => std::env::var("USERPROFILE").map(|p| PathBuf::from(p).join("Desktop")).unwrap_or_else(|_| target.join("Desktop")),
+        "Documents" => std::env::var("USERPROFILE").map(|p| PathBuf::from(p).join("Documents")).unwrap_or_else(|_| target.join("Documents")),
+        "Pictures" => std::env::var("USERPROFILE").map(|p| PathBuf::from(p).join("Pictures")).unwrap_or_else(|_| target.join("Pictures")),
+        "Videos" => std::env::var("USERPROFILE").map(|p| PathBuf::from(p).join("Videos")).unwrap_or_else(|_| target.join("Videos")),
+        "Downloads" => PathBuf::from(profile).join("Downloads"),
+        _ => return target.join(relative),
+    };
+    base.join(remainder)
 }
 
 fn panel(ui: &mut egui::Ui, title: &str, add: impl FnOnce(&mut egui::Ui)) {
