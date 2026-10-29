@@ -45,7 +45,6 @@ internal sealed class BackupEngine : IDisposable
         var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
         var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         var commonData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
-        var windowsRoot = Path.GetPathRoot(Environment.GetFolderPath(Environment.SpecialFolder.Windows)) ?? "C:\\";
         var candidates = new[]
         {
             ("Рабочий стол", Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory)),
@@ -57,12 +56,28 @@ internal sealed class BackupEngine : IDisposable
             ("AppData-Roaming", appData),
             ("AppData-LocalLow", Path.Combine(home, "AppData", "LocalLow")),
             ("AppData-Local", localAppData),
-            ("ProgramData", commonData),
-            ("XboxGames", Path.Combine(windowsRoot, "XboxGames"))
+            ("ProgramData", commonData)
         };
         foreach (var item in candidates)
             if (!string.IsNullOrWhiteSpace(item.Item2) && Directory.Exists(item.Item2))
                 yield return (item.Item1, Path.GetFullPath(item.Item2));
+
+        // Xbox libraries may live on D:, E:, F:, etc., not only on the Windows drive.
+        foreach (var drive in DriveInfo.GetDrives())
+        {
+            string? xboxPath = null;
+            try
+            {
+                if (drive.DriveType == DriveType.Fixed && drive.IsReady)
+                {
+                    var candidate = Path.Combine(drive.RootDirectory.FullName, "XboxGames");
+                    if (Directory.Exists(candidate)) xboxPath = Path.GetFullPath(candidate);
+                }
+            }
+            catch { }
+            if (xboxPath is not null)
+                yield return ($"XboxGames-{drive.Name.TrimEnd(Path.DirectorySeparatorChar, ':')}", xboxPath);
+        }
     }
 
     public static IEnumerable<string> DefaultSources()
