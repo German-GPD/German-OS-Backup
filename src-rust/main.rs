@@ -407,7 +407,10 @@ impl BackupApp {
             for entry in WalkDir::new(&backup).follow_links(false).into_iter().filter_map(Result::ok) {
                 if !entry.file_type().is_file() { continue; }
                 let rel = match entry.path().strip_prefix(&backup) { Ok(p) => p, Err(_) => continue };
-                let out = target.join(rel);
+                // If the user selects a drive root (e.g. C:\\), restore known Windows
+                // profile folders to their actual user-folder locations instead of
+                // creating C:\\Изображения, C:\\Документы, etc.
+                let out = restore_destination(&target, rel);
                 if out.exists() { skipped += 1; continue; }
                 if let Some(parent) = out.parent() { if fs::create_dir_all(parent).is_err() { errors += 1; continue; } }
                 match fs::copy(entry.path(), &out) { Ok(_) => restored += 1, Err(_) => errors += 1 }
@@ -600,6 +603,32 @@ impl eframe::App for BackupApp {
             ui.label(RichText::new(format!("German OS Backup Rust Edition v{VERSION} · Windows · локальная работа · без телеметрии")).color(muted).size(10.0));
         });
     }
+}
+
+
+fn restore_destination(target: &Path, relative: &Path) -> PathBuf {
+    let mut components = relative.components();
+    let Some(std::path::Component::Normal(root)) = components.next() else {
+        return target.join(relative);
+    };
+    let root_name = root.to_string_lossy();
+    let is_drive_root = target.components().count() == 1;
+    if is_drive_root {
+        let folder = match root_name.to_lowercase().as_str() {
+            "desktop" | "рабочий стол" => Some("Desktop"),
+            "documents" | "документы" => Some("Documents"),
+            "pictures" | "изображения" | "рисунки" => Some("Pictures"),
+            "videos" | "видео" => Some("Videos"),
+            "downloads" | "загрузки" => Some("Downloads"),
+            _ => None,
+        };
+        if let (Some(folder), Ok(profile)) = (folder, std::env::var("USERPROFILE")) {
+            let mut output = PathBuf::from(profile).join(folder);
+            for component in components { output.push(component.as_os_str()); }
+            return output;
+        }
+    }
+    target.join(relative)
 }
 
 fn panel(ui: &mut egui::Ui, title: &str, add: impl FnOnce(&mut egui::Ui)) {
