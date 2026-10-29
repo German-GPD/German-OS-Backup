@@ -628,12 +628,14 @@ fn apply_mica_backdrop(window: &winit::window::Window) {
             let hwnd = win32.hwnd.get() as *mut std::ffi::c_void;
             let mica: i32 = 2; // DWMSBT_MAINWINDOW
             let square_corners: i32 = 1; // DWMWCP_DONOTROUND
+            let dark_title_bar: i32 = 1;
             unsafe extern "system" {
                 fn DwmSetWindowAttribute(hwnd: *mut std::ffi::c_void, attribute: u32, value: *const std::ffi::c_void, size: u32) -> i32;
             }
             unsafe {
                 let _ = DwmSetWindowAttribute(hwnd, 38, &mica as *const _ as *const _, std::mem::size_of::<i32>() as u32);
                 let _ = DwmSetWindowAttribute(hwnd, 33, &square_corners as *const _ as *const _, std::mem::size_of::<i32>() as u32);
+                let _ = DwmSetWindowAttribute(hwnd, 20, &dark_title_bar as *const _ as *const _, std::mem::size_of::<i32>() as u32);
             }
         }
     }
