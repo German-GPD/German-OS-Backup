@@ -515,7 +515,7 @@ internal sealed class DashboardForm : Form
         // Windows stores the current user accent as an ARGB DWORD.
         try
         {
-            using var key = Registry.CurrentUser.OpenSubKey(@"Software\\Microsoft\\Windows\\DWM");
+            using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\DWM");
             var raw = key?.GetValue("AccentColor");
             if (raw is int value)
             {
