@@ -17,7 +17,7 @@ internal static class Palette
             Text = text,
             AutoSize = false,
             ForeColor = color,
-            BackColor = Background,
+            BackColor = Color.Transparent,
             Font = new Font("Segoe UI", size, bold ? FontStyle.Bold : FontStyle.Regular, GraphicsUnit.Point)
         };
 
