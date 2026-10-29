@@ -770,7 +770,6 @@ fn main() -> eframe::Result {
 #[cfg(test)]
 mod regression_tests {
     use super::*;
-    use std::io::Write;
 
     fn temp_dir(label: &str) -> PathBuf {
         let path = std::env::temp_dir().join(format!(
@@ -832,9 +831,9 @@ mod regression_tests {
     fn restore_maps_pictures_folder_from_drive_root_to_profile() {
         if !cfg!(windows) { return; }
         let profile = std::env::var("USERPROFILE").expect("Windows user profile");
-        let target = PathBuf::from(std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into()) + "\\\\");
+        let target = PathBuf::from(format!("{}\\", std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into())));
         let relative = Path::new("Pictures").join("Holiday").join("photo.jpg");
-        let backup = PathBuf::from("D:\\\\Backup\\\\Pictures");
+        let backup = PathBuf::from(r"D:\Backup\Pictures");
 
         let actual = restore_destination(&target, &relative, &backup);
         let expected = PathBuf::from(profile).join("Pictures").join("Holiday").join("photo.jpg");
@@ -845,9 +844,9 @@ mod regression_tests {
     fn restore_maps_selected_pictures_backup_folder_to_profile() {
         if !cfg!(windows) { return; }
         let profile = std::env::var("USERPROFILE").expect("Windows user profile");
-        let target = PathBuf::from(std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into()) + "\\\\");
+        let target = PathBuf::from(format!("{}\\", std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into())));
         let relative = Path::new("photo.jpg");
-        let backup = PathBuf::from("D:\\\\Backup\\\\Pictures");
+        let backup = PathBuf::from(r"D:\Backup\Pictures");
 
         let actual = restore_destination(&target, relative, &backup);
         let expected = PathBuf::from(profile).join("Pictures").join("photo.jpg");
