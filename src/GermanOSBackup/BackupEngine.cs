@@ -394,6 +394,13 @@ internal sealed class BackupEngine : IDisposable
                     var src = new FileInfo(source); if (!src.Exists) return;
                     if (File.Exists(target)) { var dst = new FileInfo(target); if (dst.Length == src.Length && dst.LastWriteTimeUtc >= src.LastWriteTimeUtc) return; }
                     Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                    if (mode != "eco" && await Task.Run(() => RustCopyEngine.TryCopy(source, target), ct).ConfigureAwait(false))
+                    {
+                        File.SetLastWriteTimeUtc(target, src.LastWriteTimeUtc);
+                        Interlocked.Increment(ref stats.FilesCopied);
+                        Interlocked.Add(ref stats.BytesCopied, src.Length);
+                        return;
+                    }
                     temp = target + ".gob-tmp-" + Environment.ProcessId + "-" + Guid.NewGuid().ToString("N");
                     long written = 0;
                     var bufferSize = mode == "eco" ? 128 * 1024 : mode == "balanced" ? 512 * 1024 : 1024 * 1024;
