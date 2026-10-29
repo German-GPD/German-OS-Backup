@@ -71,7 +71,9 @@ internal sealed class SourcesForm : Form
     {
         var selected = config.SelectedSources is { Count: > 0 } ? config.SelectedSources : BackupEngine.DefaultSources().ToList();
         foreach (var path in BackupEngine.Sources().Select(x => x.Path)) if (Directory.Exists(path)) AddPath(path, selected.Any(s => string.Equals(Path.GetFullPath(s).TrimEnd(Path.DirectorySeparatorChar), Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase)));
-        foreach (var path in selected) if (Directory.Exists(path) && !tree.Nodes.Cast<TreeNode>().Any(n => IsSameOrChild(n.Tag?.ToString() ?? "", path))) AddPath(path, true);
+        foreach (var path in selected)
+            if (Directory.Exists(path) && !ContainsPathNode(path))
+                AddPath(path, true);
     }
     private void AddPath(string path, bool checkedState)
     {
@@ -100,5 +102,22 @@ internal sealed class SourcesForm : Form
         var path = node.Tag?.ToString(); if (node.Checked && !ancestorChecked && path != null) { yield return path; yield break; }
         foreach (TreeNode child in node.Nodes) foreach (var p in Selected(child, ancestorChecked || node.Checked)) yield return p;
     }
+    private bool ContainsPathNode(string path)
+    {
+        var full = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar);
+        return AllNodes(tree.Nodes).Any(node =>
+            node.Tag is string value &&
+            string.Equals(Path.GetFullPath(value).TrimEnd(Path.DirectorySeparatorChar), full, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static IEnumerable<TreeNode> AllNodes(TreeNodeCollection nodes)
+    {
+        foreach (TreeNode node in nodes)
+        {
+            yield return node;
+            foreach (var child in AllNodes(node.Nodes)) yield return child;
+        }
+    }
+
     private static bool IsSameOrChild(string parent, string child) => string.Equals(parent.TrimEnd(Path.DirectorySeparatorChar), child.TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase) || child.StartsWith(parent.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
 }
