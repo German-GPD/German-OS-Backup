@@ -110,6 +110,41 @@ impl BackupApp {
         app
     }
 
+    fn new_webview() -> Self {
+        let local_app_data = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| ".".into());
+        let config_path = PathBuf::from(local_app_data)
+            .join("GermanOSBackup-Rust")
+            .join("config.json");
+        let config = fs::read_to_string(&config_path)
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default();
+        let stats = Arc::new(Mutex::new(Stats {
+            status: "Готово к работе".into(),
+            ..Default::default()
+        }));
+        let mut app = Self {
+            config,
+            config_path,
+            stats,
+            cancel: Arc::new(AtomicBool::new(false)),
+            system: System::new(),
+            cpu: 0.0,
+            memory: 0.0,
+            memory_used: 0,
+            memory_total: 0,
+            last_stats: Stats::default(),
+            last_tick: std::time::Instant::now(),
+            log: vec![
+                format!("German OS Backup Rust Edition {VERSION} запущен"),
+                "Данные хранятся локально; телеметрии нет".into(),
+            ],
+            watcher_cancel: Arc::new(AtomicBool::new(false)),
+        };
+        app.restart_auto_watchers();
+        app
+    }
+
     fn save_config(&mut self) {
         if let Some(parent) = self.config_path.parent() { let _ = fs::create_dir_all(parent); }
         if let Ok(json) = serde_json::to_string_pretty(&self.config) {
@@ -780,12 +815,256 @@ fn format_bytes(value: u64) -> String {
     format!("{n:.1} {}", UNITS[i])
 }
 
-fn main() -> eframe::Result {
-    let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([1180.0, 840.0]).with_min_inner_size([880.0, 700.0]),
-        ..Default::default()
+struct WebUiHost {
+    backend: BackupApp,
+    window: Option<winit::window::Window>,
+    webview: Option<wry::WebView>,
+    sender: std::sync::mpsc::Sender<String>,
+    receiver: std::sync::mpsc::Receiver<String>,
+    last_refresh: std::time::Instant,
+}
+
+impl WebUiHost {
+    fn new() -> Self {
+        let (sender, receiver) = std::sync::mpsc::channel();
+        Self {
+            backend: BackupApp::new_webview(),
+            window: None,
+            webview: None,
+            sender,
+            receiver,
+            last_refresh: std::time::Instant::now() - Duration::from_secs(2),
+        }
+    }
+
+    fn publish_state(&mut self) {
+        let Some(webview) = self.webview.as_ref() else { return; };
+        self.backend.system.refresh_cpu_usage();
+        self.backend.system.refresh_memory();
+        self.backend.cpu = self.backend.system.global_cpu_usage();
+        self.backend.memory_used = self.backend.system.used_memory();
+        self.backend.memory_total = self.backend.system.total_memory();
+        self.backend.memory = if self.backend.memory_total > 0 {
+            self.backend.memory_used as f32 / self.backend.memory_total as f32 * 100.0
+        } else { 0.0 };
+        let stats = self.backend.stats.lock().map(|s| s.clone()).unwrap_or_default();
+        self.backend.last_stats = stats.clone();
+        let status = if stats.running { "copying" }
+            else if stats.errors > 0 { "attention" }
+            else if stats.files_copied > 0 { "completed" }
+            else { "waiting" };
+        let headline = if stats.running {
+            stats.status.clone()
+        } else if stats.errors > 0 {
+            "Нужна проверка ошибок".to_string()
+        } else if stats.files_copied > 0 {
+            "Последняя операция завершена".to_string()
+        } else {
+            "Ожидаем ручного запуска".to_string()
+        };
+        let payload = serde_json::json!({
+            "status": status,
+            "headline": headline,
+            "lastScan": if stats.files_copied > 0 { "Последняя операция в этой сессии" } else { "Ещё не завершено" },
+            "bytes": stats.bytes_copied,
+            "files": stats.files_copied,
+            "seen": stats.files_seen,
+            "errors": stats.errors,
+            "speed": stats.speed,
+            "scanning": stats.running,
+            "destination": self.backend.config.destination,
+            "sourceCount": self.backend.config.sources.len(),
+            "sourcePaths": self.backend.config.sources,
+            "autoUpdateSources": self.backend.config.auto_update_sources,
+            "version": VERSION,
+            "cpuPercent": self.backend.cpu,
+            "ramUsedGb": self.backend.memory_used as f64 / 1_073_741_824.0,
+            "ramTotalGb": self.backend.memory_total as f64 / 1_073_741_824.0,
+            "ramPercent": self.backend.memory,
+            "performanceMode": self.backend.config.performance_mode
+        });
+        let _ = webview.evaluate_script(&format!("window.updateStats({payload});"));
+    }
+
+    fn handle_action(&mut self, raw: &str) -> bool {
+        let request: serde_json::Value = match serde_json::from_str(raw) {
+            Ok(value) => value,
+            Err(error) => {
+                self.notify(&format!("Не удалось обработать команду интерфейса: {error}"));
+                return false;
+            }
+        };
+        let action = request.get("action").and_then(|v| v.as_str()).unwrap_or("");
+        match action {
+            "sources" => {
+                if let Some(paths) = rfd::FileDialog::new().set_title("Выбери папки для резервного копирования").pick_folders() {
+                    self.backend.config.sources = paths.into_iter()
+                        .map(|p| p.to_string_lossy().to_string()).collect();
+                    let selected = self.backend.config.sources.clone();
+                    self.backend.config.auto_update_sources.retain(|p| {
+                        selected.iter().any(|s| s.eq_ignore_ascii_case(p))
+                    });
+                    self.backend.save_config();
+                    self.backend.restart_auto_watchers();
+                    self.notify("Источники сохранены. Нажми «Создать / обновить копию», чтобы запустить копирование.");
+                }
+            }
+            "toggleAuto" => {
+                if let Some(path) = request.get("path").and_then(|v| v.as_str()) {
+                    if self.backend.config.sources.iter().any(|p| p.eq_ignore_ascii_case(path)) {
+                        if let Some(index) = self.backend.config.auto_update_sources.iter().position(|p| p.eq_ignore_ascii_case(path)) {
+                            self.backend.config.auto_update_sources.remove(index);
+                            self.notify("Автообновление отключено. Существующая резервная копия сохранена.");
+                        } else {
+                            self.backend.config.auto_update_sources.push(path.to_string());
+                            self.notify("Автообновление включено для выбранной папки.");
+                        }
+                        self.backend.save_config();
+                        self.backend.restart_auto_watchers();
+                    }
+                }
+            }
+            "restore" => self.backend.restore_missing(),
+            "verify" => self.backend.verify_backup(),
+            "performanceMode" => {
+                if let Some(mode) = request.get("mode").and_then(|v| v.as_str()) {
+                    if ["eco", "balanced", "max"].contains(&mode) {
+                        self.backend.config.performance_mode = mode.to_string();
+                        self.backend.save_config();
+                        self.notify(match mode {
+                            "eco" => "Режим экономии ресурсов включён.",
+                            "max" => "Максимальная скорость включена.",
+                            _ => "Сбалансированный режим включён.",
+                        });
+                    }
+                }
+            }
+            "scan" => {
+                self.notify("Резервное копирование запущено вручную.");
+                self.backend.start_backup();
+            }
+            "zip" => self.backend.create_zip(),
+            "stop" => self.backend.stop_backup(),
+            "openDestination" => {
+                let path = self.backend.config.destination.clone();
+                if path.is_empty() {
+                    self.notify("Сначала выбери папку для резервной копии.");
+                } else if std::process::Command::new("explorer").arg(path).spawn().is_err() {
+                    self.notify("Не удалось открыть папку резервной копии.");
+                }
+            }
+            "chooseDestination" => {
+                if let Some(path) = rfd::FileDialog::new().set_title("Выбери отдельную папку для резервных копий").pick_folder() {
+                    self.backend.config.destination = path.to_string_lossy().to_string();
+                    self.backend.save_config();
+                    self.backend.restart_auto_watchers();
+                    self.notify("Место хранения сохранено. Новые копии будут записываться в выбранную папку.");
+                }
+            }
+            "log" => {
+                let path = self.backend.config_path.parent().unwrap_or(Path::new(".")).join("app.log");
+                if let Some(parent) = path.parent() { let _ = fs::create_dir_all(parent); }
+                if !path.exists() { let _ = fs::write(&path, "German OS Backup Rust Edition log\n"); }
+                if std::process::Command::new("notepad").arg(path).spawn().is_err() {
+                    self.notify("Не удалось открыть журнал.");
+                }
+            }
+            "help" => self.notify("Выбери папки-источники, укажи отдельный диск для копии и нажми «Создать / обновить копию». Восстановление не перезаписывает существующие файлы."),
+            "checkUpdates" => {
+                let _ = std::process::Command::new("cmd").args(["/C", "start", "", RELEASES]).spawn();
+                self.notify("Открыта страница официальных релизов GitHub.");
+            }
+            "exit" => return true,
+            _ => self.notify("Это действие пока недоступно в Rust Edition."),
+        }
+        false
+    }
+
+    fn notify(&self, message: &str) {
+        if let Some(webview) = self.webview.as_ref() {
+            if let Ok(text) = serde_json::to_string(message) {
+                let _ = webview.evaluate_script(&format!("window.setNotice({text});"));
+            }
+        }
+    }
+}
+
+impl winit::application::ApplicationHandler for WebUiHost {
+    fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
+        if self.window.is_some() { return; }
+        let window = match event_loop.create_window(
+            winit::window::Window::default_attributes()
+                .with_title("German OS Backup Rust Edition")
+                .with_inner_size(winit::dpi::LogicalSize::new(1180.0, 820.0))
+                .with_min_inner_size(winit::dpi::LogicalSize::new(900.0, 680.0))
+        ) {
+            Ok(window) => window,
+            Err(error) => {
+                eprintln!("Не удалось создать окно German OS Backup: {error}");
+                event_loop.exit();
+                return;
+            }
+        };
+        let sender = self.sender.clone();
+        let init_script = r#"window.chrome = window.chrome || {}; window.chrome.webview = window.chrome.webview || { postMessage: function(message) { window.ipc.postMessage(typeof message === 'string' ? message : JSON.stringify(message)); } };"#;
+        let webview = match wry::WebViewBuilder::new()
+            .with_html(include_str!("../dashboard.html"))
+            .with_initialization_script(init_script)
+            .with_ipc_handler(move |request| {
+                let _ = sender.send(request.body().to_string());
+            })
+            .build(&window) {
+                Ok(webview) => webview,
+                Err(error) => {
+                    eprintln!("Не удалось запустить WebView2: {error}");
+                    event_loop.exit();
+                    return;
+                }
+            };
+        self.window = Some(window);
+        self.webview = Some(webview);
+    }
+
+    fn window_event(
+        &mut self,
+        event_loop: &winit::event_loop::ActiveEventLoop,
+        _window_id: winit::window::WindowId,
+        event: winit::event::WindowEvent,
+    ) {
+        if matches!(event, winit::event::WindowEvent::CloseRequested) {
+            event_loop.exit();
+        }
+    }
+
+    fn about_to_wait(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
+        while let Ok(message) = self.receiver.try_recv() {
+            if self.handle_action(&message) {
+                event_loop.exit();
+                return;
+            }
+        }
+        if self.last_refresh.elapsed() >= Duration::from_secs(1) {
+            self.publish_state();
+            self.last_refresh = std::time::Instant::now();
+        }
+        event_loop.set_control_flow(winit::event_loop::ControlFlow::WaitUntil(
+            std::time::Instant::now() + Duration::from_millis(100)
+        ));
+    }
+}
+
+fn main() {
+    let event_loop = match winit::event_loop::EventLoop::new() {
+        Ok(loop_) => loop_,
+        Err(error) => {
+            eprintln!("Не удалось запустить оконный цикл: {error}");
+            return;
+        }
     };
-    eframe::run_native("German OS Backup Rust Edition", options, Box::new(|cc| Ok(Box::new(BackupApp::new(cc)))))
+    let mut host = WebUiHost::new();
+    if let Err(error) = event_loop.run_app(&mut host) {
+        eprintln!("Ошибка окна German OS Backup: {error}");
+    }
 }
 
 
