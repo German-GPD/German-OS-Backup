@@ -124,4 +124,5 @@ internal sealed class AppConfig
     public bool FirstRunComplete { get; set; }
     public bool? StartWithWindows { get; set; }
     public List<string> SelectedSources { get; set; } = new();
+    public List<string> AutoUpdateSources { get; set; } = new();
 }
