@@ -71,7 +71,7 @@ internal sealed class DashboardForm : Form
                 await web.EnsureCoreWebView2Async(
                     await CoreWebView2Environment.CreateAsync(null, webViewData));
 
-                web.CoreWebView2Controller.DefaultBackgroundColor = Color.Transparent;
+                web.DefaultBackgroundColor = Color.Transparent;
                 web.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
                 web.CoreWebView2.Settings.AreDevToolsEnabled = false;
                 web.CoreWebView2.WebMessageReceived += async (_, args) =>
