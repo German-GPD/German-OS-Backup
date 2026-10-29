@@ -9,7 +9,7 @@ internal sealed class FirstRunForm : Form
 
     public FirstRunForm()
     {
-        Text = "Первый запуск · German OS Backup C# Edition"; ClientSize = new Size(650, 490);
+        Text = "Первый запуск · German OS Backup"; ClientSize = new Size(650, 490);
         FormBorderStyle = FormBorderStyle.FixedDialog; MaximizeBox = false; MinimizeBox = false;
         StartPosition = FormStartPosition.CenterScreen; BackColor = Palette.Background; ForeColor = Palette.Text; Font = Palette.Font;
         var badge = Palette.Label("ПЕРВЫЙ ЗАПУСК", 10, Palette.Green, true); badge.SetBounds(30, 25, 250, 22); Controls.Add(badge);
