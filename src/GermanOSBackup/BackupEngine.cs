@@ -56,19 +56,49 @@ internal sealed class BackupEngine : IDisposable
 
     public Task StartAsync()
     {
-        // Backups are always user-triggered. Startup never scans or copies files.
-        Interlocked.Exchange(ref started, 1);
+        if (Interlocked.Exchange(ref started, 1) == 0)
+        {
+            RefreshWatchers();
+            _ = Task.Run(ProcessQueueAsync);
+        }
         return Task.CompletedTask;
     }
 
     public void RefreshWatchers()
     {
-        // Automatic file watching is intentionally disabled. Use "Проверить сейчас"
-        // to run a backup explicitly.
         lock (watchers)
         {
             foreach (var watcher in watchers) watcher.Dispose();
             watchers.Clear();
+
+            foreach (var source in config.AutoUpdateSources ?? new List<string>())
+            {
+                if (!config.SelectedSources.Any(s => string.Equals(Path.GetFullPath(s), Path.GetFullPath(source), StringComparison.OrdinalIgnoreCase)))
+                    continue;
+                if (!Directory.Exists(source)) { Log($"Автообновление пропущено: папка недоступна {source}"); continue; }
+                try
+                {
+                    var watcher = new FileSystemWatcher(source)
+                    {
+                        IncludeSubdirectories = true,
+                        NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.LastWrite | NotifyFilters.Size,
+                        InternalBufferSize = 32 * 1024,
+                        EnableRaisingEvents = false
+                    };
+                    watcher.Created += (_, e) => Queue(e.FullPath);
+                    watcher.Changed += (_, e) => Queue(e.FullPath);
+                    watcher.Renamed += (_, e) => Queue(e.FullPath);
+                    watcher.Error += (_, e) =>
+                    {
+                        Log($"События файловой системы потеряны для {source}: {e.GetException().Message}. Запущена полная сверка.");
+                        _ = Task.Run(RequestScanAsync);
+                    };
+                    watchers.Add(watcher);
+                    watcher.EnableRaisingEvents = true;
+                    Log("Динамическое автообновление включено: " + source);
+                }
+                catch (Exception ex) { Log($"Не удалось включить автообновление для {source}: {ex.Message}"); }
+            }
         }
     }
 
@@ -229,9 +259,29 @@ internal sealed class BackupEngine : IDisposable
                 foreach (var path in batch)
                 {
                     if (stop.IsCancellationRequested) break; var target = MapPath(path); if (target is null) continue;
-                    try { if (Directory.Exists(path)) Directory.CreateDirectory(target); else if (File.Exists(path)) await CopyFileAsync(path, target, stop.Token); }
+                    try
+                    {
+                        if (Directory.Exists(path)) Directory.CreateDirectory(target);
+                        else if (File.Exists(path))
+                        {
+                            // Wait for games and applications to finish writing a save before copying it.
+                            var before = new FileInfo(path);
+                            var length = before.Length;
+                            var modified = before.LastWriteTimeUtc;
+                            await Task.Delay(450, stop.Token);
+                            if (!File.Exists(path)) continue; // Keep the old backup if the source was deleted.
+                            var after = new FileInfo(path);
+                            if (after.Length != length || after.LastWriteTimeUtc != modified)
+                            {
+                                Queue(path);
+                                continue;
+                            }
+                            await CopyFileAsync(path, target, stop.Token);
+                        }
+                        // Deletions are intentionally ignored: backup copies are retained.
+                    }
                     catch (OperationCanceledException) { break; }
-                    catch (Exception ex) { Interlocked.Increment(ref stats.Errors); Log($"Ошибка изменения {path}: {ex.Message}"); }
+                    catch (Exception ex) { Interlocked.Increment(ref stats.Errors); Log($"Ошибка автообновления {path}: {ex.Message}"); }
                 }
             }
             catch (OperationCanceledException) { break; }
@@ -379,6 +429,7 @@ internal sealed class BackupEngine : IDisposable
         if (Interlocked.Exchange(ref disposed, 1) != 0) return;
         stop.Cancel();
         lock (watchers) { foreach (var watcher in watchers) watcher.Dispose(); watchers.Clear(); }
+        lock (queueLock) pending.Clear();
         // Do not dispose semaphores here: an in-flight copy may still be unwinding after cancellation.
     }
 }
