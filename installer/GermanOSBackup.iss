@@ -30,10 +30,10 @@ Source: "..\publish\german_os_backup_engine.dll"; DestDir: "{app}"; Flags: ignor
 
 [Icons]
 Name: "{autoprograms}\German OS Backup"; Filename: "{app}\{#AppExeName}"
-Name: "{autodesktop}\German OS Backup C# Edition"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
+Name: "{autodesktop}\German OS Backup"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
 
 [Tasks]
 Name: "desktopicon"; Description: "Создать ярлык на рабочем столе"; GroupDescription: "Дополнительные ярлыки:"; Flags: unchecked
 
 [Run]
-Filename: "{app}\{#AppExeName}"; Parameters: "--first-run"; Description: "Запустить German OS Backup C# Edition"; Flags: postinstall nowait skipifsilent runasoriginaluser
+Filename: "{app}\{#AppExeName}"; Parameters: "--first-run"; Description: "Запустить German OS Backup"; Flags: postinstall nowait skipifsilent runasoriginaluser
