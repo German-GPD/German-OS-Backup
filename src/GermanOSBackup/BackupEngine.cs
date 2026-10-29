@@ -100,14 +100,16 @@ internal sealed class BackupEngine : IDisposable
             .Distinct(StringComparer.OrdinalIgnoreCase);
     }
 
-    public Task StartAsync()
+    public async Task StartAsync()
     {
-        if (Interlocked.Exchange(ref started, 1) == 0)
-        {
-            RefreshWatchers();
-            _ = Task.Run(ProcessQueueAsync);
-        }
-        return Task.CompletedTask;
+        if (Interlocked.Exchange(ref started, 1) != 0) return;
+
+        RefreshWatchers();
+        _ = Task.Run(ProcessQueueAsync);
+
+        // A background start must reconcile changes made while the app was closed.
+        // Watchers alone only observe future events and would leave older edits unsaved.
+        await RequestScanAsync().ConfigureAwait(false);
     }
 
     public void RefreshWatchers()
