@@ -23,6 +23,56 @@ button:disabled{opacity:.45;cursor:not-allowed}
 /* Strict black + green palette. Never inherit the Windows accent (often blue). */
 :root{color-scheme:dark;--bg:#050605;--surface:#090c0a;--surface2:#0d120e;--line:#1d2b20;--text:#edf8ef;--muted:#94a398;--green:#43ff78;--accent:#43ff78;--accent-hover:#7aff9b;--accent-soft:rgba(67,255,120,.12);--mica:rgba(8,11,9,.96);--red:#ff7777;--amber:#ffd166}
 html,body{background:#050605!important;color:#edf8ef}.shell{background:rgba(5,6,5,.98);backdrop-filter:none}.side{background:#070907;border-color:#1d2b20}.card,.hero,.path,.side-note{background:#090c0a;border-color:#1d2b20}.hero{background:linear-gradient(110deg,rgba(67,255,120,.09),#090c0a 72%);border-color:#24452d;border-left:3px solid #43ff78}.hero p{color:#b8c9bc}.nav button.active,.nav button:hover{background:rgba(67,255,120,.1);border-color:#285a35;border-left-color:#43ff78}.status-pill{color:#43ff78;border-color:#285a35;background:#0b170e}.status-pill.copying{color:#43ff78;border-color:#285a35;background:#0b170e}.progress-bar.running{background:linear-gradient(90deg,#174d29,#43ff78,#174d29)}.path,.source-paths div{background:#070907}.drive-icon,.health-icon{background:#102016;color:#43ff78}.tip:hover:after{background:#0b110d;border-color:#285a35}.notice{background:#0b170e;border-color:#285a35;color:#d9f8df}button{background:#101510;border-color:#26372b}button.primary{background:#43ff78;border-color:#43ff78;color:#061008}button.primary:hover{background:#7aff9b}button:focus-visible{outline-color:#43ff78}
+
+/* Premium graphite refinement */
+:root{
+ --accent:#9bc7a5;--accent-hover:#b4d7bc;--accent-soft:rgba(155,199,165,.075);
+ --bg:#0b0d0c;--surface:#111513;--surface2:#171c18;--line:#2a312c;
+ --text:#e8ece8;--muted:#9aa39c;--mica:rgba(13,16,14,.97)
+}
+body{color:var(--text);font-family:"Segoe UI Variable","Segoe UI",sans-serif}
+.shell{background:rgba(11,13,12,.97);backdrop-filter:blur(24px) saturate(115%)}
+.side{background:#0d100e;border-color:#252c27}
+.brand{font-size:14px;letter-spacing:-.035em}
+.mark{color:var(--accent);border-color:#405245}
+.nav button{font-size:12px;color:#9aa39c}
+.nav button.active,.nav button:hover{background:#171e19;border-color:#2a382d;color:#edf2ed}
+.nav button.active{border-left:2px solid var(--accent)}
+.side-note{background:#101412;border-color:#252c27;color:#9aa39c}
+.main{padding:27px clamp(20px,3vw,42px)}
+.top{margin-bottom:23px}
+.top h1{font-size:26px;letter-spacing:-.045em;font-weight:600}
+.eyebrow{color:var(--accent);font-size:10px;letter-spacing:1.5px}
+button{background:#141815;border-color:#303832;color:var(--text);padding:10px 13px}
+button:hover{background:#1a211c;border-color:#5a735f}
+button.primary{background:var(--accent);border-color:var(--accent);color:#111713;box-shadow:none}
+button.primary:hover{background:var(--accent-hover)}
+.notice{background:#131a15;border-color:#3c5141;color:#e8ece8}
+.hero{background:#121713;border-color:#2d3930;border-left:2px solid var(--accent);padding:22px 23px}
+.hero .label{color:var(--accent)}
+.hero h2{font-size:24px;letter-spacing:-.05em;font-weight:600}
+.hero p{color:#aab3ac;font-size:13px;line-height:1.75}
+.status-pill{border-color:#394b3d;background:#111713;color:var(--accent);font-size:11px}
+.status-pill.copying{color:var(--accent);border-color:#536d58;background:#151d17}
+.status-pill.attention{color:#d5bd88;border-color:#65563b;background:#1c1912}
+.grid{gap:10px}
+.card{background:#101412;border-color:#272f29;padding:17px}
+.card-label{font-size:11px;color:#9aa39c}
+.value{font-size:27px;font-weight:600;letter-spacing:-.055em}
+.hint{color:#879188}
+.section-grid{gap:10px}
+.section-title h3{font-size:14px;font-weight:600}
+.path{background:#151a16;border-color:#2a332c}
+.drive-icon,.health-icon{background:#171e19;color:var(--accent)}
+.progress-track{background:#2a312c}
+.progress-bar{background:var(--accent)}
+.progress-bar.running{background:linear-gradient(90deg,#5d7963,#b9d8bf,#5d7963);background-size:200% 100%}
+.tip{border-color:#46534a;color:#aab3ac}
+.tip:hover:after{background:#202721;border-color:#46534a}
+.source-paths div{background:#141915;border-left-color:#526a57}
+.source-path-item button.watch-toggle.enabled{border-color:#536d58;color:#c2dec7;background:#1a241c}
+.resource-track{background:#2a312c}.resource-fill{background:var(--accent)}
+.footer{color:#7f8981}
 </style></head><body><div class="shell">
 <aside class="side"><div class="brand"><div class="mark">G_</div><span>German OS Backup</span></div><nav class="nav"><button class="active" onclick="tab('overview')">▦　 Обзор</button><button onclick="act('sources')">▣　 Источники</button><button onclick="act('restore')">↶　 Восстановление</button><button onclick="act('verify')">✓　 Проверка целостности</button><button onclick="act('log')">≡　 Журнал событий</button></nav><div class="side-note"><b>Подсказка</b><p>Копия должна находиться на отдельном физическом диске, если нужно защититься от поломки накопителя.</p><button onclick="act('help')" style="width:100%">Все подсказки</button></div></aside>
 <main class="main"><header class="top"><div><div class="eyebrow">ЛОКАЛЬНАЯ ЗАЩИТА ФАЙЛОВ</div><h1>Обзор резервного копирования</h1></div><div class="top-actions"><button onclick="act('help')">? Помощь</button><button onclick="act('checkUpdates')">↻ Проверить обновления</button><button onclick="act('zip')">Создать ZIP</button><button onclick="act('scan')">Создать / обновить копию</button><button class="primary" onclick="act('sources')">Выбрать папки</button></div></header>
