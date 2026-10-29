@@ -186,6 +186,21 @@ internal sealed class BackupEngine : IDisposable
                     foreach (var file in files)
                     {
                         ct.ThrowIfCancellationRequested();
+                        try
+                        {
+                            if ((File.GetAttributes(file) & FileAttributes.ReparsePoint) != 0)
+                            {
+                                Log($"Глубокая проверка: пропущена символическая ссылка {file}");
+                                continue;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            different++;
+                            Interlocked.Increment(ref stats.Errors);
+                            Log($"Глубокая проверка: не удалось проверить атрибуты {file}: {ex.Message}");
+                            continue;
+                        }
                         var target = Path.Combine(to, Path.GetFileName(file));
                         try
                         {
@@ -277,7 +292,22 @@ internal sealed class BackupEngine : IDisposable
             var tasks = new List<Task>(Math.Min(files.Length, 128));
             foreach (var file in files)
             {
-                ct.ThrowIfCancellationRequested(); Interlocked.Increment(ref stats.FilesSeen);
+                ct.ThrowIfCancellationRequested();
+                try
+                {
+                    if ((File.GetAttributes(file) & FileAttributes.ReparsePoint) != 0)
+                    {
+                        Log($"Пропущена символическая ссылка: {file}");
+                        continue;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Interlocked.Increment(ref stats.Errors);
+                    Log($"Не удалось проверить атрибуты файла {file}: {ex.Message}");
+                    continue;
+                }
+                Interlocked.Increment(ref stats.FilesSeen);
                 tasks.Add(CopyFileSafelyAsync(file, Path.Combine(to, Path.GetFileName(file)), ct));
                 if (tasks.Count >= 64) { await Task.WhenAll(tasks); tasks.Clear(); }
             }
@@ -465,7 +495,12 @@ internal sealed class BackupEngine : IDisposable
                 foreach (var file in Directory.EnumerateFiles(current))
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    if ((File.GetAttributes(file) & FileAttributes.ReparsePoint) != 0) continue;
+                    var attributes = File.GetAttributes(file);
+                    if ((attributes & FileAttributes.ReparsePoint) != 0 ||
+                        file.Contains(".gob-tmp-", StringComparison.OrdinalIgnoreCase) ||
+                        file.Contains(".gob-rust-", StringComparison.OrdinalIgnoreCase) ||
+                        file.EndsWith(".gob-restore-tmp", StringComparison.OrdinalIgnoreCase))
+                        continue;
                     var relative = Path.GetRelativePath(sourceRoot, file).Replace(Path.DirectorySeparatorChar, '/');
                     archive.CreateEntryFromFile(file, Path.GetFileName(sourceRoot) + "/" + relative, level);
                 }
