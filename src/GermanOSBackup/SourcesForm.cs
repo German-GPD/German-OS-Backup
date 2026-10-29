@@ -69,7 +69,7 @@ internal sealed class SourcesForm : Form
 
     private void BuildTree()
     {
-        var selected = config.SelectedSources is { Count: > 0 } ? config.SelectedSources : BackupEngine.Sources().Select(x => x.Path).ToList();
+        var selected = config.SelectedSources is { Count: > 0 } ? config.SelectedSources : BackupEngine.DefaultSources().ToList();
         foreach (var path in BackupEngine.Sources().Select(x => x.Path)) if (Directory.Exists(path)) AddPath(path, selected.Any(s => string.Equals(Path.GetFullPath(s).TrimEnd(Path.DirectorySeparatorChar), Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase)));
         foreach (var path in selected) if (Directory.Exists(path) && !tree.Nodes.Cast<TreeNode>().Any(n => IsSameOrChild(n.Tag?.ToString() ?? "", path))) AddPath(path, true);
     }
