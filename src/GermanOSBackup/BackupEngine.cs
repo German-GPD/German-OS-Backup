@@ -499,42 +499,90 @@ internal sealed class BackupEngine : IDisposable
                 ct.ThrowIfCancellationRequested();
                 try
                 {
-                    var src = new FileInfo(source); if (!src.Exists) return;
-                    if (File.Exists(target)) { var dst = new FileInfo(target); if (dst.Length == src.Length && dst.LastWriteTimeUtc == src.LastWriteTimeUtc) return; }
-                    Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-                    if (mode != "eco" && src.Length <= 64L * 1024 * 1024 && await Task.Run(() => RustCopyEngine.TryCopy(source, target), ct).ConfigureAwait(false))
+                    var src = new FileInfo(source);
+                    src.Refresh();
+                    if (!src.Exists) return; // A deleted source must never delete the last good backup.
+                    var sourceLength = src.Length;
+                    var sourceLastWriteUtc = src.LastWriteTimeUtc;
+
+                    if (File.Exists(target))
                     {
-                        File.SetLastWriteTimeUtc(target, src.LastWriteTimeUtc);
+                        var dst = new FileInfo(target);
+                        dst.Refresh();
+                        if (dst.Length == sourceLength && dst.LastWriteTimeUtc == sourceLastWriteUtc) return;
+                    }
+
+                    Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                    temp = target + ".gob-tmp-" + Environment.ProcessId + "-" + Guid.NewGuid().ToString("N");
+
+                    if (mode != "eco" && sourceLength <= 64L * 1024 * 1024 &&
+                        await Task.Run(() => RustCopyEngine.TryCopy(source, temp), ct).ConfigureAwait(false))
+                    {
+                        EnsureSourceUnchanged(source, sourceLength, sourceLastWriteUtc);
+                        File.SetLastWriteTimeUtc(temp, sourceLastWriteUtc);
+                        File.Move(temp, target, true);
+                        temp = null;
                         Interlocked.Increment(ref stats.FilesCopied);
-                        Interlocked.Add(ref stats.BytesCopied, src.Length);
-                        Interlocked.Add(ref bytesInWindow, src.Length);
+                        Interlocked.Add(ref stats.BytesCopied, sourceLength);
+                        Interlocked.Add(ref bytesInWindow, sourceLength);
                         UpdateSpeed();
                         return;
                     }
+
+                    // The native path may be unavailable on development builds. Remove any
+                    // partial native output and use the cancellable managed implementation.
+                    if (temp is not null && File.Exists(temp)) File.Delete(temp);
                     temp = target + ".gob-tmp-" + Environment.ProcessId + "-" + Guid.NewGuid().ToString("N");
+
                     long written = 0;
                     var bufferSize = mode == "eco" ? 128 * 1024 : mode == "balanced" ? 512 * 1024 : 1024 * 1024;
-                    await using (var input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, bufferSize, FileOptions.Asynchronous | FileOptions.SequentialScan))
-                    await using (var output = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None, bufferSize, FileOptions.Asynchronous | FileOptions.SequentialScan))
+                    await using (var input = new FileStream(source, FileMode.Open, FileAccess.Read,
+                        FileShare.ReadWrite | FileShare.Delete, bufferSize,
+                        FileOptions.Asynchronous | FileOptions.SequentialScan))
+                    await using (var output = new FileStream(temp, FileMode.CreateNew, FileAccess.Write,
+                        FileShare.None, bufferSize, FileOptions.Asynchronous | FileOptions.SequentialScan))
                     {
-                        var buffer = new byte[bufferSize]; int read;
-                        while ((read = await input.ReadAsync(buffer, ct)) > 0)
+                        var buffer = new byte[bufferSize];
+                        int read;
+                        while ((read = await input.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
                         {
-                            await output.WriteAsync(buffer.AsMemory(0, read), ct);
+                            await output.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
                             written += read;
                             Interlocked.Add(ref bytesInWindow, read);
                             UpdateSpeed();
-                            if (mode == "eco") await Task.Delay(8, ct);
+                            if (mode == "eco") await Task.Delay(8, ct).ConfigureAwait(false);
                         }
-                        await output.FlushAsync(ct);
+                        await output.FlushAsync(ct).ConfigureAwait(false);
                     }
-                    File.Move(temp, target, true); temp = null; File.SetLastWriteTimeUtc(target, src.LastWriteTimeUtc);
-                    Interlocked.Increment(ref stats.FilesCopied); Interlocked.Add(ref stats.BytesCopied, written); return;
+
+                    EnsureSourceUnchanged(source, sourceLength, sourceLastWriteUtc);
+                    File.SetLastWriteTimeUtc(temp, sourceLastWriteUtc);
+                    File.Move(temp, target, true);
+                    temp = null;
+                    Interlocked.Increment(ref stats.FilesCopied);
+                    Interlocked.Add(ref stats.BytesCopied, written);
+                    return;
                 }
-                catch (IOException) when (attempt < 2) { if (temp is not null) { try { File.Delete(temp); } catch { } temp = null; } await Task.Delay(300 * (attempt + 1), ct); }
+                catch (IOException) when (attempt < 2)
+                {
+                    if (temp is not null) { try { File.Delete(temp); } catch { } temp = null; }
+                    await Task.Delay(300 * (attempt + 1), ct).ConfigureAwait(false);
+                }
             }
         }
-        finally { if (temp is not null) { try { File.Delete(temp); } catch { } } slots.Release(); }
+        finally
+        {
+            if (temp is not null) { try { File.Delete(temp); } catch { } }
+            slots.Release();
+        }
+    }
+
+    private static void EnsureSourceUnchanged(string source, long expectedLength, DateTime expectedLastWriteUtc)
+    {
+        var current = new FileInfo(source);
+        current.Refresh();
+        if (!current.Exists || current.Length != expectedLength || current.LastWriteTimeUtc != expectedLastWriteUtc)
+            throw new IOException("Исходный файл изменился во время копирования; повторяем попытку.");
     }
 
     public async Task CreateZipAsync(string zipPath, CancellationToken cancellationToken = default)
