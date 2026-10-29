@@ -20,6 +20,11 @@ jobs:
           targets: x86_64-pc-windows-msvc
       - name: Build Rust Edition
         run: cargo build --release --target x86_64-pc-windows-msvc
+      - name: Prepare Rust installer
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path .\publish | Out-Null
+          Copy-Item .\target\x86_64-pc-windows-msvc\release\GermanOSBackup-Rust.exe .\publish\GermanOSBackup-Rust.exe
       - name: Install Inno Setup
         run: choco install innosetup --yes --no-progress
       - name: Package Rust Edition
