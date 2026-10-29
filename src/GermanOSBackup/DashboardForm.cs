@@ -528,13 +528,15 @@ internal sealed class DashboardForm : Form
 
     private void ApplyMicaBackdrop()
     {
-        if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000)) return;
+        if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22621)) return;
         try
         {
             var mica = 2;
             _ = DwmSetWindowAttribute(Handle, 38, ref mica, sizeof(int));
             var squareCorners = 1;
             _ = DwmSetWindowAttribute(Handle, 33, ref squareCorners, sizeof(int));
+            var darkTitleBar = 1;
+            _ = DwmSetWindowAttribute(Handle, 20, ref darkTitleBar, sizeof(int));
         }
         catch { }
     }
