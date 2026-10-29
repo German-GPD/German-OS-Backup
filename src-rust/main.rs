@@ -823,6 +823,56 @@ mod regression_tests {
     }
 
     #[test]
+    fn atomic_copy_failure_keeps_last_good_backup() {
+        let dir = temp_dir("atomic-copy-failure");
+        let source = dir.join("missing-source.bin");
+        let target = dir.join("backup.bin");
+        fs::write(&target, b"last known good backup").unwrap();
+
+        assert!(copy_file_atomically(&source, &target, None).is_err());
+        assert_eq!(fs::read(&target).unwrap(), b"last known good backup");
+        assert_eq!(fs::read_dir(&dir).unwrap().count(), 1);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn atomic_copy_creates_missing_parent_directories() {
+        let dir = temp_dir("atomic-copy-nested");
+        let source = dir.join("source.bin");
+        let target = dir.join("new").join("nested").join("backup.bin");
+        fs::write(&source, b"nested backup").unwrap();
+
+        assert_eq!(copy_file_atomically(&source, &target, None).unwrap(), 13);
+        assert_eq!(fs::read(&target).unwrap(), b"nested backup");
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn restore_keeps_existing_user_data_when_source_is_missing() {
+        let dir = temp_dir("restore-missing-source");
+        let source = dir.join("missing-backup.txt");
+        let target = dir.join("current.txt");
+        fs::write(&target, b"keep me").unwrap();
+
+        assert!(restore_file_atomically(&source, &target).is_err());
+        assert_eq!(fs::read(&target).unwrap(), b"keep me");
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn restore_maps_documents_folder_from_drive_root_to_profile() {
+        if !cfg!(windows) { return; }
+        let profile = std::env::var("USERPROFILE").expect("Windows user profile");
+        let target = PathBuf::from(format!("{}\\\\", std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into())));
+        let relative = Path::new("Documents").join("School").join("notes.txt");
+        let backup = PathBuf::from(r"D:\\Backup\\Documents");
+
+        let actual = restore_destination(&target, &relative, &backup);
+        let expected = PathBuf::from(profile).join("Documents").join("School").join("notes.txt");
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
     fn restore_does_not_overwrite_existing_file() {
         let dir = temp_dir("restore-no-overwrite");
         let source = dir.join("backup.txt");
