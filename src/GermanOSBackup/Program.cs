@@ -68,8 +68,41 @@ internal static class Program
     internal static AppConfig? LoadConfig()
     {
         if (!File.Exists(ConfigPath)) return null;
-        try { return JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(ConfigPath)); }
-        catch { return null; }
+        try
+        {
+            var json = File.ReadAllText(ConfigPath);
+            var config = JsonSerializer.Deserialize<AppConfig>(json);
+            if (config is null) throw new InvalidDataException("Файл настроек пуст или не содержит допустимую конфигурацию.");
+            return config;
+        }
+        catch (Exception ex)
+        {
+            string? preservedPath = null;
+            try
+            {
+                preservedPath = ConfigPath + ".corrupt-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".json";
+                File.Copy(ConfigPath, preservedPath, false);
+            }
+            catch { preservedPath = null; }
+
+            try
+            {
+                File.AppendAllText(LogPath,
+                    $"[{DateTime.Now:O}] Не удалось прочитать настройки: {ex}. " +
+                    (preservedPath is null ? "Повреждённый файл не удалось сохранить отдельно." : $"Исходные настройки сохранены: {preservedPath}") +
+                    Environment.NewLine);
+            }
+            catch { }
+
+            var backupNote = preservedPath is null
+                ? "Не удалось создать отдельную копию повреждённого файла."
+                : "Старая конфигурация сохранена отдельно:\n" + preservedPath;
+            MessageBox.Show(
+                "Файл настроек не удалось прочитать. Мастер настройки откроется заново.\n\n" +
+                backupNote + "\n\nПодробности: " + LogPath,
+                "Настройки восстановлены безопасно", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return null;
+        }
     }
 
     internal static void SaveConfig(AppConfig config)
