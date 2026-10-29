@@ -1,7 +1,7 @@
 use std::fs;
 use std::io;
 use std::os::windows::ffi::OsStringExt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 static NEXT_TEMP: AtomicU64 = AtomicU64::new(1);
@@ -15,7 +15,7 @@ extern "system" {
 const MOVEFILE_REPLACE_EXISTING: u32 = 0x1;
 const MOVEFILE_WRITE_THROUGH: u32 = 0x8;
 
-fn wide_path(path: &PathBuf) -> Vec<u16> {
+fn wide_path(path: &Path) -> Vec<u16> {
     use std::os::windows::ffi::OsStrExt;
     path.as_os_str()
         .encode_wide()
@@ -25,6 +25,10 @@ fn wide_path(path: &PathBuf) -> Vec<u16> {
 
 /// Copies one file to a temporary sibling and replaces the destination only
 /// after the full copy succeeds. Returns 0 on success, otherwise a Win32 code.
+///
+/// # Safety
+/// `source` and `target` must point to readable, NUL-terminated UTF-16 buffers
+/// that remain valid for the duration of this call.
 #[no_mangle]
 pub unsafe extern "system" fn gob_copy_file_utf16(source: *const u16, target: *const u16) -> i32 {
     if source.is_null() || target.is_null() {
