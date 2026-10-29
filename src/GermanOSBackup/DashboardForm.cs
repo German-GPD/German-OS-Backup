@@ -280,7 +280,7 @@ internal sealed class DashboardForm : Form
             var bytes = await UpdateClient.GetByteArrayAsync(downloadUrl!);
             var manifest = await UpdateClient.GetStringAsync(checksumUrl!);
             string? expectedHash = null;
-            foreach (var line in manifest.Split(new[] { '\\r', '\\n' }, StringSplitOptions.RemoveEmptyEntries))
+            foreach (var line in manifest.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
             {
                 var parts = line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
                 if (parts.Length == 2 && parts[1].TrimStart('*') == "GermanOSBackup-CS-Setup-x64.exe")
