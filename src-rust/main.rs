@@ -300,7 +300,17 @@ impl BackupApp {
                 }
                 let root_name = source.file_name().map(|n| n.to_os_string()).unwrap_or_else(|| "Backup".into());
                 let target_root = destination.join(root_name);
-                for entry in WalkDir::new(&source).follow_links(false).into_iter().filter_map(Result::ok) {
+                for entry_result in WalkDir::new(&source).follow_links(false) {
+                    let entry = match entry_result {
+                        Ok(entry) => entry,
+                        Err(error) => {
+                            if let Ok(mut state) = stats.lock() {
+                                state.errors += 1;
+                                state.status = format!("Ошибка чтения резервируемой папки: {error}");
+                            }
+                            continue;
+                        }
+                    };
                     if cancel.load(Ordering::SeqCst) { break; }
                     let path = entry.path();
                     let relative = match path.strip_prefix(&source) { Ok(p) => p, Err(_) => continue };
@@ -359,13 +369,17 @@ impl BackupApp {
         if let Ok(mut s) = stats.lock() { s.running = true; s.cancellable = false; s.status = "Глубокая проверка SHA-256…".into(); }
         self.add_log("Запущена глубокая проверка SHA-256");
         thread::spawn(move || {
-            let mut checked = 0u64; let mut missing = 0u64; let mut different = 0u64;
+            let mut checked = 0u64; let mut missing = 0u64; let mut different = 0u64; let mut walk_errors = 0u64;
             for source_text in sources {
                 let source = PathBuf::from(&source_text);
                 if !source.is_dir() { continue; }
                 let root_name = source.file_name().map(|n| n.to_os_string()).unwrap_or_else(|| "Backup".into());
                 let target_root = destination.join(root_name);
-                for entry in WalkDir::new(&source).follow_links(false).into_iter().filter_map(Result::ok) {
+                for entry_result in WalkDir::new(&source).follow_links(false) {
+                    let entry = match entry_result {
+                        Ok(entry) => entry,
+                        Err(_) => { walk_errors += 1; continue; }
+                    };
                     if !entry.file_type().is_file() { continue; }
                     let path = entry.path();
                     let relative = match path.strip_prefix(&source) { Ok(p) => p, Err(_) => continue };
@@ -387,7 +401,8 @@ impl BackupApp {
             }
             if let Ok(mut s) = stats.lock() {
                 s.running = false; s.cancellable = false;
-                s.status = format!("Проверка завершена · проверено {checked}, отсутствует {missing}, различается {different}");
+                s.errors += walk_errors;
+                s.status = format!("Проверка завершена · проверено {checked}, отсутствует {missing}, различается {different}, ошибок обхода {walk_errors}");
             }
         });
     }
@@ -410,7 +425,11 @@ impl BackupApp {
         self.add_log("Запущено восстановление без перезаписи существующих файлов");
         thread::spawn(move || {
             let mut restored = 0u64; let mut skipped = 0u64; let mut errors = 0u64;
-            for entry in WalkDir::new(&backup).follow_links(false).into_iter().filter_map(Result::ok) {
+            for entry_result in WalkDir::new(&backup).follow_links(false) {
+                let entry = match entry_result {
+                    Ok(entry) => entry,
+                    Err(_) => { errors += 1; continue; }
+                };
                 if !entry.file_type().is_file() { continue; }
                 let rel = match entry.path().strip_prefix(&backup) { Ok(p) => p, Err(_) => continue };
                 // If the user selects a drive root (e.g. C:\\), restore known Windows
@@ -454,7 +473,8 @@ impl BackupApp {
                 let mut archive = zip::ZipWriter::new(file);
                 let options = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
                 let mut count = 0u64;
-                for entry in WalkDir::new(&source).follow_links(false).into_iter().filter_map(Result::ok) {
+                for entry_result in WalkDir::new(&source).follow_links(false) {
+                    let entry = entry_result?;
                     if !entry.file_type().is_file() { continue; }
                     let relative = entry.path().strip_prefix(&source)?;
                     let root_name = source.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "Backup".to_string());
