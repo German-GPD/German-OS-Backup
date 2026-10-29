@@ -165,6 +165,11 @@ internal sealed class BackupEngine : IDisposable
             stats.IsScanning = true;
             var sources = ConfiguredSources().ToList();
             var availableSources = sources.Where(item => Directory.Exists(item.Path)).ToList();
+            foreach (var missingSource in sources.Where(item => !Directory.Exists(item.Path)))
+            {
+                Interlocked.Increment(ref stats.Errors);
+                Log($"Глубокая проверка: выбранная папка не найдена: {missingSource.Path}");
+            }
             if (availableSources.Count == 0)
                 throw new DirectoryNotFoundException("Ни одна выбранная папка не найдена. Открой «Источники» и проверь пути.");
             foreach (var (_, source, targetRoot) in availableSources)
@@ -257,6 +262,11 @@ internal sealed class BackupEngine : IDisposable
             {
                 var sources = ConfiguredSources().ToList();
                 var availableSources = sources.Where(item => Directory.Exists(item.Path)).ToList();
+                foreach (var missingSource in sources.Where(item => !Directory.Exists(item.Path)))
+                {
+                    Interlocked.Increment(ref stats.Errors);
+                    Log($"Выбранная папка не найдена, пропускаем: {missingSource.Path}");
+                }
                 if (availableSources.Count == 0)
                     throw new DirectoryNotFoundException("Ни одна выбранная папка не найдена. Открой «Источники» и проверь пути.");
 
