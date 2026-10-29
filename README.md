@@ -1,5 +1,7 @@
 # German OS Backup
 
+**Текущая версия:** `1.4.1` · Единый установщик для Windows x64
+
 > **Windows 10/11 · x64 · один установщик · C# + WebView2 · Rust Engine · v1.4.1**
 
 [Сайт проекта](https://german-gpd.github.io/German-OS-Backup/) · [Релизы](https://github.com/German-GPD/German-OS-Backup/releases) · [Сообщить об ошибке](https://github.com/German-GPD/German-OS-Backup/issues)
