@@ -14,7 +14,7 @@ $checks = @{
     'README.md' = "**Версия:** $version"
     'index.html' = "VERSION $version"
     'dashboard.html' = "v$version"
-    'script.js' = "'$version'"
+    'script.js' = $version
 }
 foreach ($entry in $checks.GetEnumerator()) {
     $content = Get-Content $entry.Key -Raw
