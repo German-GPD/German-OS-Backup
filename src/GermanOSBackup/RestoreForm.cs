@@ -138,7 +138,7 @@ internal sealed class RestoreForm : Form
         status.Text = "Сканируем резервную копию…";
         try
         {
-            allFiles = await Task.Run(() => Directory.EnumerateFiles(backupRoot, "*", SearchOption.AllDirectories)
+            allFiles = await Task.Run(() => EnumerateBackupFilesSafely(backupRoot)
                 .Where(path => !path.Contains(Path.DirectorySeparatorChar + ".gob-tmp-", StringComparison.OrdinalIgnoreCase)
                     && !path.Contains(".gob-rust-", StringComparison.OrdinalIgnoreCase))
                 .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
@@ -169,7 +169,10 @@ internal sealed class RestoreForm : Form
             if (query.Length > 0)
                 filtered = filtered.Where(path => path.Contains(query, StringComparison.OrdinalIgnoreCase)
                     || Path.GetFileName(path).Contains(query, StringComparison.OrdinalIgnoreCase));
-            foreach (var path in filtered)
+            // Keep the UI responsive for large game-save/AppData backups.
+            // Search still works across the complete allFiles collection.
+            const int displayLimit = 1500;
+            foreach (var path in filtered.Take(displayLimit))
             {
                 try
                 {
@@ -190,6 +193,42 @@ internal sealed class RestoreForm : Form
             loading = false;
         }
         UpdateStatus();
+        var matchingCount = query.Length == 0 ? allFiles.Count : allFiles.Count(path =>
+            path.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+            Path.GetFileName(path).Contains(query, StringComparison.OrdinalIgnoreCase));
+        if (matchingCount > 1500)
+            status.Text = $"Найдено: {matchingCount:N0} · показаны первые 1 500 — уточни поиск";
+    }
+
+    private static List<string> EnumerateBackupFilesSafely(string root)
+    {
+        var result = new List<string>();
+        var pendingDirs = new Stack<string>();
+        pendingDirs.Push(root);
+        while (pendingDirs.Count > 0)
+        {
+            var current = pendingDirs.Pop();
+            try
+            {
+                foreach (var file in Directory.EnumerateFiles(current))
+                    result.Add(file);
+
+                foreach (var dir in Directory.EnumerateDirectories(current))
+                {
+                    try
+                    {
+                        // Never follow junctions/symlinks: they can loop or point outside the backup.
+                        if ((File.GetAttributes(dir) & FileAttributes.ReparsePoint) == 0)
+                            pendingDirs.Push(dir);
+                    }
+                    catch (IOException) { }
+                    catch (UnauthorizedAccessException) { }
+                }
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
+        return result;
     }
 
     private async Task RestoreSelectedAsync()
@@ -279,7 +318,14 @@ internal sealed class RestoreForm : Form
     private void UpdateStatus()
     {
         var checkedCount = files.Items.Cast<ListViewItem>().Count(item => item.Checked);
-        status.Text = $"Файлов: {files.Items.Count:N0} · Выбрано: {checkedCount:N0}";
+        var hasDestination = !string.IsNullOrWhiteSpace(destination.Text) && Directory.Exists(destination.Text);
+        restore.Enabled = !loading && checkedCount > 0 && hasDestination;
+        if (allFiles.Count == 0)
+            status.Text = "Резервная копия пуста — сначала создай копию файлов.";
+        else if (!hasDestination)
+            status.Text = $"Файлов: {files.Items.Count:N0} · выбери папку назначения";
+        else
+            status.Text = $"Файлов: {files.Items.Count:N0} · выбрано: {checkedCount:N0}";
     }
 
     private static bool IsSameOrChild(string path, string root)
