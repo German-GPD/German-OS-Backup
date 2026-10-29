@@ -211,7 +211,15 @@ internal sealed class RestoreForm : Form
             try
             {
                 foreach (var file in Directory.EnumerateFiles(current))
-                    result.Add(file);
+                {
+                    try
+                    {
+                        if ((File.GetAttributes(file) & FileAttributes.ReparsePoint) == 0)
+                            result.Add(file);
+                    }
+                    catch (IOException) { }
+                    catch (UnauthorizedAccessException) { }
+                }
 
                 foreach (var dir in Directory.EnumerateDirectories(current))
                 {
