@@ -1,4 +1,3 @@
-use std::ffi::c_void;
 use std::fs;
 use std::io;
 use std::os::windows::ffi::OsStringExt;
@@ -40,7 +39,9 @@ pub unsafe extern "system" fn gob_copy_file_utf16(source: *const u16, target: *c
     let src = PathBuf::from(std::ffi::OsString::from_wide(std::slice::from_raw_parts(source, source_len)));
     let dst = PathBuf::from(std::ffi::OsString::from_wide(std::slice::from_raw_parts(target, target_len)));
     let id = NEXT_TEMP.fetch_add(1, Ordering::Relaxed);
-    let temp = PathBuf::from(format!("{}.gob-rust-{}-{}", dst.display(), std::process::id(), id));
+    let mut temp_name = dst.as_os_str().to_os_string();
+    temp_name.push(format!(".gob-rust-{}-{}", std::process::id(), id));
+    let temp = PathBuf::from(temp_name);
 
     let result = (|| -> io::Result<()> {
         fs::copy(&src, &temp)?;
