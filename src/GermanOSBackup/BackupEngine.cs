@@ -45,6 +45,7 @@ internal sealed class BackupEngine : IDisposable
         var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
         var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         var commonData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
+        var savedGames = Path.Combine(home, "Saved Games");
         var candidates = new[]
         {
             ("Рабочий стол", Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory)),
@@ -52,7 +53,7 @@ internal sealed class BackupEngine : IDisposable
             ("Изображения", Environment.GetFolderPath(Environment.SpecialFolder.MyPictures)),
             ("Видео", Environment.GetFolderPath(Environment.SpecialFolder.MyVideos)),
             ("Загрузки", Path.Combine(home, "Downloads")),
-            ("Сохранённые игры", Environment.GetFolderPath(Environment.SpecialFolder.SavedGames)),
+            ("Сохранённые игры", savedGames),
             ("AppData-Roaming", appData),
             ("AppData-LocalLow", Path.Combine(home, "AppData", "LocalLow")),
             ("AppData-Local", localAppData),
