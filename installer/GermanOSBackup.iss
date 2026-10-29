@@ -27,6 +27,7 @@ RestartApplications=no
 [Files]
 Source: "..\publish\GermanOSBackup.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\publish\german_os_backup_engine.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\publish\MicrosoftEdgeWebView2Setup.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
 
 [Icons]
 Name: "{autoprograms}\German OS Backup"; Filename: "{app}\{#AppExeName}"
@@ -36,4 +37,24 @@ Name: "{autodesktop}\German OS Backup"; Filename: "{app}\{#AppExeName}"; Tasks: 
 Name: "desktopicon"; Description: "Создать ярлык на рабочем столе"; GroupDescription: "Дополнительные ярлыки:"; Flags: unchecked
 
 [Run]
+Filename: "{tmp}\MicrosoftEdgeWebView2Setup.exe"; Parameters: "/silent /install"; StatusMsg: "Проверяем компонент Microsoft WebView2…"; Flags: waituntilterminated; Check: not IsWebView2RuntimeInstalled
 Filename: "{app}\{#AppExeName}"; Parameters: "--first-run"; Description: "Запустить German OS Backup"; Flags: postinstall nowait skipifsilent runasoriginaluser
+
+[Code]
+function HasWebView2Version(RootKey: Integer; KeyPath: String): Boolean;
+var
+  Version: String;
+begin
+  Result := RegQueryStringValue(RootKey, KeyPath, 'pv', Version) and
+    (Version <> '') and (Version <> '0.0.0.0');
+end;
+
+function IsWebView2RuntimeInstalled: Boolean;
+const
+  RuntimeId = '{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}';
+begin
+  Result :=
+    HasWebView2Version(HKLM, 'SOFTWARE\\WOW6432Node\\Microsoft\\EdgeUpdate\\Clients\\' + RuntimeId) or
+    HasWebView2Version(HKLM, 'SOFTWARE\\Microsoft\\EdgeUpdate\\Clients\\' + RuntimeId) or
+    HasWebView2Version(HKCU, 'Software\\Microsoft\\EdgeUpdate\\Clients\\' + RuntimeId);
+end;
