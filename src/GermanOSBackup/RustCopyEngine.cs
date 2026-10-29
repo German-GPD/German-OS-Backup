@@ -21,8 +21,8 @@ internal static class RustCopyEngine
             if (result != 0)
             {
                 var error = Marshal.GetLastWin32Error();
-                throw new Win32Exception(error == 0 ? result : error,
-                    "Rust-движок не смог безопасно скопировать файл.");
+                throw new IOException("Rust-движок не смог безопасно скопировать файл.",
+                    new Win32Exception(error == 0 ? result : error));
             }
             return true;
         }
