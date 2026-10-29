@@ -67,3 +67,49 @@ pub unsafe extern "system" fn gob_copy_file_utf16(source: *const u16, target: *c
         }
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::gob_copy_file_utf16;
+    use std::{
+        fs,
+        os::windows::ffi::OsStrExt,
+        path::Path,
+        time::{SystemTime, UNIX_EPOCH},
+    };
+
+    fn wide(path: &Path) -> Vec<u16> {
+        path.as_os_str().encode_wide().chain(std::iter::once(0)).collect()
+    }
+
+    #[test]
+    fn copies_file_and_replaces_destination() {
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock must be after Unix epoch")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "gob-native-engine-test-{}-{stamp}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&root).expect("create test directory");
+        let source = root.join("source-save.dat");
+        let target = root.join("nested").join("backup-save.dat");
+        let payload = b"German OS Backup native Rust test payload";
+        fs::write(&source, payload).expect("write source");
+        fs::write(&target, b"old data").ok();
+        let source_wide = wide(&source);
+        let target_wide = wide(&target);
+
+        // SAFETY: both buffers are NUL-terminated UTF-16 paths and stay alive
+        // for the duration of the native call.
+        let result = unsafe {
+            gob_copy_file_utf16(source_wide.as_ptr(), target_wide.as_ptr())
+        };
+
+        assert_eq!(result, 0, "native copy must succeed");
+        assert_eq!(fs::read(&target).expect("read destination"), payload);
+        let _ = fs::remove_dir_all(root);
+    }
+}
