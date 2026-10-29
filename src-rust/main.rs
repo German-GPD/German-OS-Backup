@@ -612,7 +612,7 @@ fn restore_destination(target: &Path, relative: &Path) -> PathBuf {
         return target.join(relative);
     };
     let root_name = root.to_string_lossy();
-    let is_drive_root = target.components().count() == 1;
+    let is_drive_root = target.file_name().is_none();
     if is_drive_root {
         let folder = match root_name.to_lowercase().as_str() {
             "desktop" | "рабочий стол" => Some("Desktop"),
