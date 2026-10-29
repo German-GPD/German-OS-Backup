@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
+using Microsoft.Win32;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 
@@ -57,6 +58,7 @@ internal sealed class DashboardForm : Form
         Controls.Add(web);
         Shown += async (_, _) =>
         {
+            ApplyMicaBackdrop();
             try
             {
                 // Keep WebView2's profile in a user-writable location instead of the
@@ -463,7 +465,8 @@ internal sealed class DashboardForm : Form
             ramUsedGb = ram.UsedGb,
             ramTotalGb = ram.TotalGb,
             ramPercent = ram.Percent,
-            performanceMode = engine.PerformanceMode
+            performanceMode = engine.PerformanceMode,
+            accentColor = GetSystemAccentHex()
         });
         _ = web.CoreWebView2.ExecuteScriptAsync($"window.updateStats({payload});");
     }
@@ -503,6 +506,39 @@ internal sealed class DashboardForm : Form
         tray.Visible = false; tray.Dispose(); engine.Dispose();
         base.OnFormClosed(e);
     }
+
+    private static string GetSystemAccentHex()
+    {
+        try
+        {
+            var value = Registry.GetValue(
+                @"HKEY_CURRENT_USER\Software\Microsoft\Windows\DWM",
+                "AccentColor", null);
+            if (value is int color)
+                return "#" + (color & 0xFF).ToString("X2") +
+                    ((color >> 8) & 0xFF).ToString("X2") +
+                    ((color >> 16) & 0xFF).ToString("X2");
+        }
+        catch { }
+        return "#9bf0b0";
+    }
+
+    private void ApplyMicaBackdrop()
+    {
+        if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000)) return;
+        try
+        {
+            var mica = 2;
+            _ = DwmSetWindowAttribute(Handle, 38, ref mica, sizeof(int));
+            var squareCorners = 1;
+            _ = DwmSetWindowAttribute(Handle, 33, ref squareCorners, sizeof(int));
+        }
+        catch { }
+    }
+
+    [DllImport("dwmapi.dll", PreserveSig = true)]
+    private static extern int DwmSetWindowAttribute(
+        IntPtr hwnd, int attribute, ref int value, int valueSize);
 
     private static readonly string Html = LoadDashboardHtml();
 
