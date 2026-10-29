@@ -163,8 +163,13 @@ internal sealed class RestoreForm : Form
         try
         {
             allFiles = await Task.Run(() => EnumerateBackupFilesSafely(backupRoot)
-                .Where(path => !path.Contains(Path.DirectorySeparatorChar + ".gob-tmp-", StringComparison.OrdinalIgnoreCase)
-                    && !path.Contains(".gob-rust-", StringComparison.OrdinalIgnoreCase))
+                .Where(path =>
+                {
+                    var name = Path.GetFileName(path);
+                    return !name.Contains(".gob-tmp-", StringComparison.OrdinalIgnoreCase)
+                        && !name.Contains(".gob-rust-", StringComparison.OrdinalIgnoreCase)
+                        && !name.EndsWith(".gob-restore-tmp", StringComparison.OrdinalIgnoreCase);
+                })
                 .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
                 .ToList());
             checkedPaths.IntersectWith(allFiles);
