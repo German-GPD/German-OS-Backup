@@ -1,6 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use eframe::egui::{self, Color32, RichText, Stroke, Vec2};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -534,165 +533,6 @@ impl BackupApp {
     }
 }
 
-impl eframe::App for BackupApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        self.system.refresh_cpu_usage();
-        self.system.refresh_memory();
-        self.cpu = self.system.global_cpu_usage();
-        self.memory_used = self.system.used_memory();
-        self.memory_total = self.system.total_memory();
-        self.memory = if self.memory_total > 0 { self.memory_used as f32 / self.memory_total as f32 * 100.0 } else { 0.0 };
-        if let Ok(s) = self.stats.lock() { self.last_stats = s.clone(); }
-        ctx.request_repaint_after(Duration::from_millis(900));
-
-        let green = Color32::from_rgb(151, 240, 171);
-        let muted = Color32::from_rgb(137, 149, 140);
-        egui::TopBottomPanel::top("header").frame(egui::Frame::new().fill(Color32::from_rgb(13,16,15)).inner_margin(egui::Margin::symmetric(22,18))).show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                ui.label(RichText::new("G_").size(25.0).strong().color(green));
-                ui.vertical(|ui| {
-                    ui.label(RichText::new("GERMAN OS BACKUP · RUST EDITION").size(17.0).strong().color(Color32::WHITE));
-                    ui.label(RichText::new(format!("ЛОКАЛЬНОЕ РЕЗЕРВНОЕ КОПИРОВАНИЕ · v{VERSION}")).size(10.0).color(muted));
-                });
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button("Открыть релизы ↗").clicked() { ctx.open_url(egui::OpenUrl::new_tab(RELEASES)); }
-                    ui.label(RichText::new("●").color(green));
-                });
-            });
-        });
-
-        egui::CentralPanel::default().frame(egui::Frame::new().fill(Color32::from_rgb(13,16,15)).inner_margin(egui::Margin::symmetric(22,10))).show(ctx, |ui| {
-            egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
-            ui.horizontal(|ui| {
-                ui.heading(RichText::new("Состояние системы").size(21.0).color(Color32::WHITE));
-                let (status_label, status_color) = if self.last_stats.running {
-                    ("● В РАБОТЕ", green)
-                } else if self.last_stats.errors > 0 {
-                    ("● ПРОВЕРЬ ЖУРНАЛ", Color32::from_rgb(244, 202, 120))
-                } else {
-                    ("● ГОТОВО", muted)
-                };
-                ui.label(RichText::new(status_label).color(status_color).size(11.0).strong());
-            });
-            ui.add_space(6.0);
-            let setup_hint = if self.config.destination.is_empty() {
-                "НАЧНИ ЗДЕСЬ · выбери папку назначения, чтобы указать диск для резервной копии"
-            } else if self.config.sources.is_empty() {
-                "ДОБАВЬ ИСТОЧНИКИ · выбери папки, которые нужно сохранить"
-            } else {
-                "ГОТОВО · ручное копирование и автообновление по выбранным папкам"
-            };
-            panel(ui, "БЫСТРАЯ НАСТРОЙКА", |ui| {
-                ui.label(RichText::new(setup_hint).color(if self.config.destination.is_empty() || self.config.sources.is_empty() { Color32::from_rgb(244, 202, 120) } else { green }).size(11.0).strong());
-            });
-            if self.last_stats.running {
-                ui.add_space(6.0);
-                panel(ui, "ТЕКУЩАЯ ОПЕРАЦИЯ", |ui| {
-                    ui.horizontal(|ui| {
-                        ui.spinner();
-                        ui.label(RichText::new(&self.last_stats.status).color(Color32::WHITE).size(12.0));
-                    });
-                    ui.add_space(5.0);
-                    if self.last_stats.files_seen > 0 {
-                        ui.label(RichText::new(format!("Обработано файлов: {}", self.last_stats.files_seen)).color(muted).size(10.0));
-                    }
-                    ui.label(RichText::new("Операция выполняется в фоне; точный процент появится после подсчёта общего числа файлов.").color(muted).size(10.0));
-                });
-            }
-            ui.add_space(8.0);
-            ui.columns(4, |cols| {
-                metric(&mut cols[0], "ФАЙЛЫ СКОПИРОВАНЫ", &self.last_stats.files_copied.to_string(), green);
-                metric(&mut cols[1], "ПРОПУЩЕНО БЕЗ ИЗМЕНЕНИЙ", &self.last_stats.files_skipped.to_string(), Color32::WHITE);
-                metric(&mut cols[2], "ОШИБКИ", &self.last_stats.errors.to_string(), if self.last_stats.errors > 0 { Color32::from_rgb(255,130,110) } else { muted });
-                metric(&mut cols[3], "СКОРОСТЬ", &format!("{}/с", format_bytes(self.last_stats.speed)), Color32::WHITE);
-            });
-            ui.add_space(10.0);
-            ui.columns(2, |cols| {
-                panel(&mut cols[0], "НАГРУЗКА ПК", |ui| {
-                    resource_bar(ui, "Процессор", self.cpu, format!("{:.0}%", self.cpu), green);
-                    resource_bar(ui, "Оперативная память", self.memory, format!("{} / {} ГБ", self.memory_used as f64 / 1_073_741_824.0, self.memory_total as f64 / 1_073_741_824.0), green);
-                });
-                panel(&mut cols[1], "ПАПКА НАЗНАЧЕНИЯ", |ui| {
-                    ui.label(RichText::new(if self.config.destination.is_empty() { "Не выбрана".into() } else { self.config.destination.clone() }).color(if self.config.destination.is_empty() { muted } else { Color32::WHITE }));
-                    ui.add_space(5.0);
-                    if ui.button("Выбрать папку назначения…").clicked() {
-                        if let Some(path) = rfd::FileDialog::new().set_title("Папка резервной копии").pick_folder() {
-                            self.config.destination = path.to_string_lossy().to_string(); self.save_config(); self.restart_auto_watchers();
-                        }
-                    }
-                });
-            });
-            ui.add_space(10.0);
-            panel(ui, "ПАПКИ ДЛЯ КОПИРОВАНИЯ", |ui| {
-                let mut remove = None;
-                let mut toggle_auto: Option<String> = None;
-                for (i, path) in self.config.sources.iter().enumerate() {
-                    ui.horizontal(|ui| {
-                        ui.label(RichText::new("DIR").color(green).monospace().size(10.0));
-                        ui.label(RichText::new(path).color(Color32::WHITE).size(12.0));
-                        let enabled = self.config.auto_update_sources.iter().any(|p| p.eq_ignore_ascii_case(path));
-                        if ui.small_button(if enabled { "Авто: вкл." } else { "Авто: выкл." }).clicked() { toggle_auto = Some(path.clone()); }
-                        if ui.small_button("Убрать").clicked() { remove = Some(i); }
-                    });
-                }
-                if let Some(path) = toggle_auto {
-                    if let Some(index) = self.config.auto_update_sources.iter().position(|p| p.eq_ignore_ascii_case(&path)) {
-                        self.config.auto_update_sources.remove(index);
-                    } else {
-                        self.config.auto_update_sources.push(path);
-                    }
-                    self.save_config();
-                    self.restart_auto_watchers();
-                }
-                if let Some(i) = remove {
-                    let removed = self.config.sources.remove(i);
-                    self.config.auto_update_sources.retain(|p| !p.eq_ignore_ascii_case(&removed));
-                    self.save_config();
-                    self.restart_auto_watchers();
-                }
-                ui.horizontal(|ui| {
-                    if ui.button("+ Добавить папку").clicked() {
-                        if let Some(path) = rfd::FileDialog::new().set_title("Добавить папку-источник").pick_folder() {
-                            let value = path.to_string_lossy().to_string();
-                            if !self.config.sources.iter().any(|s| Path::new(s) == path) { self.config.sources.push(value); self.save_config(); self.restart_auto_watchers(); }
-                        }
-                    }
-                    ui.label(RichText::new(format!("{} источников", self.config.sources.len())).color(muted).size(11.0));
-                });
-            });
-            ui.add_space(10.0);
-            ui.horizontal_wrapped(|ui| {
-                if ui.button("Проверить SHA-256").clicked() { self.verify_backup(); }
-                if ui.button("Восстановить…").clicked() { self.restore_missing(); }
-                if ui.button("Создать ZIP…").clicked() { self.create_zip(); }
-                ui.label(RichText::new("РЕЖИМ").color(muted).size(10.0));
-                for (value, label) in [("eco","Экономия"),("balanced","Баланс"),("max","Максимальная скорость")] {
-                    if ui.selectable_label(self.config.performance_mode == value, label).clicked() { self.config.performance_mode = value.into(); self.save_config(); }
-                }
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let (running, cancellable) = self.stats.lock().map(|s| (s.running, s.cancellable)).unwrap_or((true, false));
-                    if running && cancellable {
-                        if ui.button("■ Остановить").clicked() { self.stop_backup(); }
-                    } else if running {
-                        ui.label(RichText::new("Операция выполняется…").color(muted).size(11.0));
-                    } else if ui.add(egui::Button::new(RichText::new("▶ Начать копирование").color(Color32::from_rgb(13,16,15))).fill(green)).clicked() {
-                        self.start_backup();
-                    }
-                });
-            });
-            ui.add_space(8.0);
-            panel(ui, "ЖУРНАЛ", |ui| {
-                for line in &self.log { ui.label(RichText::new(line).color(muted).size(11.0).monospace()); }
-                ui.label(RichText::new(&self.last_stats.status).color(if self.last_stats.errors > 0 { Color32::from_rgb(255,130,110) } else { green }).size(11.0));
-            });
-            ui.add_space(5.0);
-            ui.label(RichText::new(format!("German OS Backup Rust Edition v{VERSION} · Windows · локальная работа · без телеметрии")).color(muted).size(10.0));
-            });
-        });
-    }
-}
-
-
 fn unique_sibling_path(path: &Path, tag: &str) -> PathBuf {
     let nonce = SystemTime::now().duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default().as_nanos();
@@ -791,28 +631,6 @@ fn restore_destination(target: &Path, relative: &Path, backup_root: &Path) -> Pa
         _ => return target.join(relative),
     };
     base.join(remainder)
-}
-
-fn panel(ui: &mut egui::Ui, title: &str, add: impl FnOnce(&mut egui::Ui)) {
-    egui::Frame::new().fill(Color32::from_rgb(17,21,18)).stroke(Stroke::new(1.0, Color32::from_rgb(43,53,45))).inner_margin(egui::Margin::same(13)).show(ui, |ui| {
-        ui.label(RichText::new(title).size(10.0).strong().color(Color32::from_rgb(151,240,171)));
-        ui.add_space(7.0);
-        add(ui);
-    });
-}
-fn metric(ui: &mut egui::Ui, label: &str, value: &str, color: Color32) {
-    panel(ui, label, |ui| { ui.label(RichText::new(value).size(24.0).strong().color(color)); });
-}
-fn resource_bar(ui: &mut egui::Ui, label: &str, value: f32, text: String, color: Color32) {
-    ui.horizontal(|ui| { ui.label(RichText::new(label).color(Color32::from_rgb(137,149,140)).size(11.0)); ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| { ui.label(RichText::new(text).color(Color32::WHITE).size(11.0)); }); });
-    ui.add(egui::ProgressBar::new((value / 100.0).clamp(0.0,1.0)).fill(color).desired_height(4.0).show_percentage());
-    ui.add_space(5.0);
-}
-fn format_bytes(value: u64) -> String {
-    const UNITS: [&str; 4] = ["Б","КБ","МБ","ГБ"];
-    let mut n = value as f64; let mut i = 0;
-    while n >= 1024.0 && i < UNITS.len()-1 { n /= 1024.0; i += 1; }
-    format!("{n:.1} {}", UNITS[i])
 }
 
 struct WebUiHost {
@@ -1133,7 +951,7 @@ mod regression_tests {
         let target = dir.join("current.txt");
         fs::write(&target, b"keep me").unwrap();
 
-        assert!(restore_file_atomically(&source, &target).is_err());
+        assert!(!restore_file_atomically(&source, &target).unwrap());
         assert_eq!(fs::read(&target).unwrap(), b"keep me");
         fs::remove_dir_all(dir).unwrap();
     }
