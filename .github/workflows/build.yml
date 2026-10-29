@@ -21,13 +21,25 @@ jobs:
         run: |
           $v = (Get-Content version.txt -Raw).Trim()
           "version=$v" >> $env:GITHUB_OUTPUT
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
       - name: Restore and build
         run: dotnet restore .\src\GermanOSBackup\GermanOSBackup.csproj
+      - name: Build native Rust engine
+        run: cargo build --manifest-path .\native-engine\Cargo.toml --release --target x86_64-pc-windows-msvc
       - name: Publish single Windows application
         run: dotnet publish .\src\GermanOSBackup\GermanOSBackup.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:Version=${{ steps.version.outputs.version }} -o .\publish
+      - name: Bundle Rust engine
+        shell: pwsh
+        run: |
+          $native = ".\native-engine\target\x86_64-pc-windows-msvc\release\german_os_backup_engine.dll"
+          if (!(Test-Path $native)) { throw "Rust native engine missing: $native" }
+          Copy-Item $native ".\publish\german_os_backup_engine.dll"
       - name: Install Inno Setup
         run: choco install innosetup --yes --no-progress
       - name: Package one installer
