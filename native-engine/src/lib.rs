@@ -25,7 +25,7 @@ fn wide_path(path: &PathBuf) -> Vec<u16> {
 #[no_mangle]
 pub unsafe extern "system" fn gob_copy_file_utf16(source: *const u16, target: *const u16) -> i32 {
     if source.is_null() || target.is_null() {
-        SetLastError(87);
+        unsafe { SetLastError(87); }
         return 87;
     }
 
@@ -47,10 +47,10 @@ pub unsafe extern "system" fn gob_copy_file_utf16(source: *const u16, target: *c
         fs::copy(&src, &temp)?;
         let temp_wide = wide_path(&temp);
         let dst_wide = wide_path(&dst);
-        let moved = MoveFileExW(temp_wide.as_ptr(), dst_wide.as_ptr(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
+        let moved = unsafe { MoveFileExW(temp_wide.as_ptr(), dst_wide.as_ptr(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) };
         if moved == 0 {
             let code = std::io::Error::last_os_error().raw_os_error().unwrap_or(1) as u32;
-            SetLastError(code);
+            unsafe { SetLastError(code); }
             let _ = fs::remove_file(&temp);
             return Err(io::Error::from_raw_os_error(code as i32));
         }
