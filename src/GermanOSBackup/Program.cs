@@ -13,8 +13,13 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        using var activationEvent = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\GermanOSBackup.Activate");
         using var mutex = new Mutex(true, @"Local\GermanOSBackup.SingleInstance", out bool first);
-        if (!first) return;
+        if (!first)
+        {
+            try { activationEvent.Set(); } catch { }
+            return;
+        }
         ApplicationConfiguration.Initialize();
         Directory.CreateDirectory(DataDirectory);
         try
@@ -56,7 +61,7 @@ internal static class Program
 
             var background = args.Contains("--background", StringComparer.OrdinalIgnoreCase);
             try { Process.GetCurrentProcess().PriorityClass = background ? ProcessPriorityClass.BelowNormal : (args.Contains("--first-run", StringComparer.OrdinalIgnoreCase) ? ProcessPriorityClass.AboveNormal : ProcessPriorityClass.Normal); } catch { }
-            Application.Run(new DashboardForm(config, background));
+            Application.Run(new DashboardForm(config, background, activationEvent));
         }
         catch (Exception ex)
         {
