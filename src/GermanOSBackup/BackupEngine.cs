@@ -23,6 +23,7 @@ internal sealed class BackupEngine : IDisposable
     private readonly object queueLock = new();
     private readonly HashSet<string> pending = new(StringComparer.OrdinalIgnoreCase);
     private int overflowScanQueued;
+    private int watcherDirectoryScanQueued;
     private readonly BackupStats stats = new();
     private readonly Stopwatch speedClock = Stopwatch.StartNew();
     private long bytesInWindow; private int disposed; private int started;
@@ -377,7 +378,19 @@ internal sealed class BackupEngine : IDisposable
         {
             // A folder can be created or renamed with existing files inside it.
             // A directory-only event is not enough to back up its contents.
-            _ = Task.Run(RequestScanAsync);
+            if (Interlocked.Exchange(ref watcherDirectoryScanQueued, 1) == 0)
+            {
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await Task.Delay(700, stop.Token).ConfigureAwait(false);
+                        await RequestScanAsync().ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) { }
+                    finally { Interlocked.Exchange(ref watcherDirectoryScanQueued, 0); }
+                });
+            }
             return;
         }
         Queue(path);
