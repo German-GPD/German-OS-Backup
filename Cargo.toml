@@ -12,6 +12,7 @@ path = "src-rust/main.rs"
 
 [dependencies]
 wry = "0.57"
+raw-window-handle = "0.6"
 winit = "0.30"
 rfd = "0.15"
 serde = { version = "1", features = ["derive"] }
