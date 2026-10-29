@@ -279,7 +279,7 @@ internal sealed class DashboardForm : Form
                 foreach (var asset in assets.EnumerateArray())
                 {
                     if (!asset.TryGetProperty("name", out var name) || !asset.TryGetProperty("browser_download_url", out var url)) continue;
-                    if (name.GetString() == "GermanOSBackup-CS-Setup-x64.exe") downloadUrl = url.GetString();
+                    if (name.GetString() == "GermanOSBackup-Setup-x64.exe") downloadUrl = url.GetString();
                     else if (name.GetString() == "SHA256SUMS.txt") checksumUrl = url.GetString();
                 }
             }
@@ -296,7 +296,7 @@ internal sealed class DashboardForm : Form
             if (MessageBox.Show(this,
                 $"Доступна German OS Backup C# Edition {latestVersion}. Сейчас установлена версия {currentVersion.ToString(3)}.\n\nСкачать официальный установщик и запустить обновление? Настройки и папки резервных копий хранятся отдельно.",
                 "Доступно обновление", MessageBoxButtons.YesNo, MessageBoxIcon.Information) != DialogResult.Yes) return;
-            var installerPath = Path.Combine(Path.GetTempPath(), "GermanOSBackup-CS-Setup-x64.exe");
+            var installerPath = Path.Combine(Path.GetTempPath(), "GermanOSBackup-Setup-x64.exe");
             details("Скачиваем установщик версии " + latestVersion + "…");
             var bytes = await UpdateClient.GetByteArrayAsync(downloadUrl!);
             var manifest = await UpdateClient.GetStringAsync(checksumUrl!);
@@ -304,7 +304,7 @@ internal sealed class DashboardForm : Form
             foreach (var line in manifest.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
             {
                 var parts = line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-                if (parts.Length == 2 && parts[1].TrimStart('*') == "GermanOSBackup-CS-Setup-x64.exe")
+                if (parts.Length == 2 && parts[1].TrimStart('*') == "GermanOSBackup-Setup-x64.exe")
                 {
                     expectedHash = parts[0];
                     break;
