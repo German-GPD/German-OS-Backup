@@ -600,6 +600,48 @@ fn restore_destination(target: &Path, relative: &Path, backup_root: &Path) -> Pa
     base.join(remainder)
 }
 
+
+#[cfg(target_os = "windows")]
+fn system_accent_hex() -> String {
+    let output = std::process::Command::new("reg")
+        .args(["query", r"HKCU\Software\Microsoft\Windows\DWM", "/v", "AccentColor"])
+        .output();
+    if let Ok(output) = output {
+        let text = String::from_utf8_lossy(&output.stdout);
+        if let Some(raw) = text.split_whitespace().find(|part| part.starts_with("0x")) {
+            if let Ok(color) = u32::from_str_radix(raw.trim_start_matches("0x"), 16) {
+                return format!("#{:02X}{:02X}{:02X}", color & 0xFF, (color >> 8) & 0xFF, (color >> 16) & 0xFF);
+            }
+        }
+    }
+    "#9bf0b0".to_string()
+}
+
+#[cfg(not(target_os = "windows"))]
+fn system_accent_hex() -> String { "#9bf0b0".to_string() }
+
+#[cfg(target_os = "windows")]
+fn apply_mica_backdrop(window: &winit::window::Window) {
+    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    if let Ok(handle) = window.window_handle() {
+        if let RawWindowHandle::Win32(win32) = handle.as_raw() {
+            let hwnd = win32.hwnd.get() as *mut std::ffi::c_void;
+            let mica: i32 = 2; // DWMSBT_MAINWINDOW
+            let square_corners: i32 = 1; // DWMWCP_DONOTROUND
+            unsafe extern "system" {
+                fn DwmSetWindowAttribute(hwnd: *mut std::ffi::c_void, attribute: u32, value: *const std::ffi::c_void, size: u32) -> i32;
+            }
+            unsafe {
+                let _ = DwmSetWindowAttribute(hwnd, 38, &mica as *const _ as *const _, std::mem::size_of::<i32>() as u32);
+                let _ = DwmSetWindowAttribute(hwnd, 33, &square_corners as *const _ as *const _, std::mem::size_of::<i32>() as u32);
+            }
+        }
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn apply_mica_backdrop(_window: &winit::window::Window) {}
+
 struct WebUiHost {
     backend: BackupApp,
     window: Option<winit::window::Window>,
@@ -666,7 +708,8 @@ impl WebUiHost {
             "ramUsedGb": self.backend.memory_used as f64 / 1_073_741_824.0,
             "ramTotalGb": self.backend.memory_total as f64 / 1_073_741_824.0,
             "ramPercent": self.backend.memory,
-            "performanceMode": self.backend.config.performance_mode
+            "performanceMode": self.backend.config.performance_mode,
+            "accentColor": system_accent_hex()
         });
         let _ = webview.evaluate_script(&format!("window.updateStats({payload});"));
     }
@@ -790,6 +833,7 @@ impl winit::application::ApplicationHandler for WebUiHost {
                 return;
             }
         };
+        apply_mica_backdrop(&window);
         let sender = self.sender.clone();
         let init_script = r#"window.chrome = window.chrome || {}; window.chrome.webview = window.chrome.webview || { postMessage: function(message) { window.ipc.postMessage(typeof message === 'string' ? message : JSON.stringify(message)); } };"#;
         let webview = match wry::WebViewBuilder::new()
