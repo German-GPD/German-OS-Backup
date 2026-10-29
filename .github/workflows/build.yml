@@ -62,7 +62,7 @@ jobs:
           if-no-files-found: error
           retention-days: 90
       - name: Publish release
-        if: github.ref == 'refs/heads/main' && startsWith(github.event.head_commit.message, 'Release:')
+        if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.version }}
