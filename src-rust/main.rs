@@ -140,7 +140,7 @@ impl BackupApp {
         };
         let system_drive = std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into());
         let system_root = PathBuf::from(format!("{}\\", system_drive.trim_end_matches(&['\\', '/'][..])));
-        let dest_text = dest.to_string_lossy().to_lowercase();
+        let dest_text = dest.to_string_lossy().trim_start_matches("\\\\?\\").to_lowercase();
         let system_text = system_root.to_string_lossy().to_lowercase();
         if dest_text.starts_with(&system_text) {
             self.add_log("Для резервной копии выбери отдельный диск, не системный");
@@ -153,7 +153,7 @@ impl BackupApp {
                 Ok(path) if path.is_dir() => path,
                 _ => { self.add_log(&format!("Папка-источник недоступна: {source}")); return; }
             };
-            let src_text = src.to_string_lossy().to_lowercase();
+            let src_text = src.to_string_lossy().trim_start_matches("\\\\?\\").to_lowercase();
             if src_text == dest_text || src_text.starts_with(&(dest_text.clone() + "\\")) || dest_text.starts_with(&(src_text.clone() + "\\")) {
                 self.add_log("Папка назначения пересекается с источником — копирование отменено");
                 return;
