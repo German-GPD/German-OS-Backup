@@ -403,20 +403,30 @@ internal sealed class BackupEngine : IDisposable
                     }
                     temp = target + ".gob-tmp-" + Environment.ProcessId + "-" + Guid.NewGuid().ToString("N");
                     long written = 0;
-                    var bufferSize = mode == "eco" ? 128 * 1024 : mode == "balanced" ? 512 * 1024 : 1024 * 1024;
-                    await using (var input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, bufferSize, FileOptions.Asynchronous | FileOptions.SequentialScan))
-                    await using (var output = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None, bufferSize, FileOptions.Asynchronous | FileOptions.SequentialScan))
+                    if (RustBackupEngine.TryCopyFile(source, temp, out written))
                     {
-                        var buffer = new byte[bufferSize]; int read;
-                        while ((read = await input.ReadAsync(buffer, ct)) > 0)
+                        ct.ThrowIfCancellationRequested();
+                        Interlocked.Add(ref bytesInWindow, written);
+                        UpdateSpeed();
+                        if (mode == "eco") await Task.Delay(8, ct);
+                    }
+                    else
+                    {
+                        var bufferSize = mode == "eco" ? 128 * 1024 : mode == "balanced" ? 512 * 1024 : 1024 * 1024;
+                        await using (var input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, bufferSize, FileOptions.Asynchronous | FileOptions.SequentialScan))
+                        await using (var output = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None, bufferSize, FileOptions.Asynchronous | FileOptions.SequentialScan))
                         {
-                            await output.WriteAsync(buffer.AsMemory(0, read), ct);
-                            written += read;
-                            Interlocked.Add(ref bytesInWindow, read);
-                            UpdateSpeed();
-                            if (mode == "eco") await Task.Delay(8, ct);
+                            var buffer = new byte[bufferSize]; int read;
+                            while ((read = await input.ReadAsync(buffer, ct)) > 0)
+                            {
+                                await output.WriteAsync(buffer.AsMemory(0, read), ct);
+                                written += read;
+                                Interlocked.Add(ref bytesInWindow, read);
+                                UpdateSpeed();
+                                if (mode == "eco") await Task.Delay(8, ct);
+                            }
+                            await output.FlushAsync(ct);
                         }
-                        await output.FlushAsync(ct);
                     }
                     File.Move(temp, target, true); temp = null; File.SetLastWriteTimeUtc(target, src.LastWriteTimeUtc);
                     Interlocked.Increment(ref stats.FilesCopied); Interlocked.Add(ref stats.BytesCopied, written); return;
