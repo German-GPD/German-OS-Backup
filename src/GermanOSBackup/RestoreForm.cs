@@ -78,7 +78,7 @@ internal sealed class RestoreForm : Form
                 {
                     cancel.Token.ThrowIfCancellationRequested();
                     var relative = Path.GetRelativePath(source, file);
-                    var destination = ResolveRestoreDestination(target, relative);
+                    var destination = ResolveRestoreDestination(target, relative, source);
                     if (!IsSameOrNested(destination, target) || string.Equals(destination, target, StringComparison.OrdinalIgnoreCase))
                     {
                         Interlocked.Increment(ref errors);
@@ -121,46 +121,48 @@ internal sealed class RestoreForm : Form
         finally { running = false; restore.Enabled = true; }
     }
 
-    private static string ResolveRestoreDestination(string target, string relative)
+    private static string ResolveRestoreDestination(string target, string relative, string backupRoot)
     {
         var normalizedTarget = NormalizeDirectoryPath(target);
         var root = Path.GetPathRoot(normalizedTarget);
         var profile = NormalizeDirectoryPath(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
-        // When a drive root or the user-profile root is selected, map standard
-        // backup roots back to Windows Known Folders instead of creating fake
-        // folders such as C:\\Изображения.
+        // When restoring to a drive/profile root, map standard-folder backups to
+        // the actual Windows Known Folder, even if the user selected that backup
+        // folder itself instead of the backup's parent directory.
         if (string.Equals(normalizedTarget, root, StringComparison.OrdinalIgnoreCase)
             || string.Equals(normalizedTarget, profile, StringComparison.OrdinalIgnoreCase))
         {
             var parts = relative.Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, 2,
                 StringSplitOptions.RemoveEmptyEntries);
+            string? basePath = null;
+            var remainder = relative;
             if (parts.Length > 0)
             {
-                var knownFolder = parts[0].ToLowerInvariant() switch
-                {
-                    "рабочий стол" or "desktop" => Environment.SpecialFolder.DesktopDirectory,
-                    "документы" or "documents" => Environment.SpecialFolder.MyDocuments,
-                    "изображения" or "pictures" or "рисунки" => Environment.SpecialFolder.MyPictures,
-                    "видео" or "videos" => Environment.SpecialFolder.MyVideos,
-                    "загрузки" or "downloads" => (Environment.SpecialFolder?)null,
-                    _ => (Environment.SpecialFolder?)null
-                };
-                var basePath = knownFolder.HasValue
-                    ? Environment.GetFolderPath(knownFolder.Value)
-                    : parts[0].Equals("загрузки", StringComparison.OrdinalIgnoreCase) || parts[0].Equals("downloads", StringComparison.OrdinalIgnoreCase)
-                        ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads")
-                        : "";
-                if (!string.IsNullOrWhiteSpace(basePath))
-                {
-                    var remainder = relative.Length > parts[0].Length
-                        ? relative[(parts[0].Length + 1)..]
-                        : "";
-                    return Path.GetFullPath(string.IsNullOrEmpty(remainder) ? basePath : Path.Combine(basePath, remainder));
-                }
+                basePath = GetKnownFolderPath(parts[0]);
+                if (!string.IsNullOrEmpty(basePath))
+                    remainder = relative.Length > parts[0].Length ? relative[(parts[0].Length + 1)..] : "";
             }
+            if (string.IsNullOrEmpty(basePath))
+            {
+                var backupRootName = Path.GetFileName(NormalizeDirectoryPath(backupRoot));
+                basePath = GetKnownFolderPath(backupRootName);
+                remainder = relative;
+            }
+            if (!string.IsNullOrWhiteSpace(basePath))
+                return Path.GetFullPath(string.IsNullOrEmpty(remainder) ? basePath : Path.Combine(basePath, remainder));
         }
         return Path.GetFullPath(Path.Combine(target, relative));
     }
+
+    private static string? GetKnownFolderPath(string folderName) => folderName.ToLowerInvariant() switch
+    {
+        "рабочий стол" or "desktop" => Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+        "документы" or "documents" => Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+        "изображения" or "pictures" or "рисунки" => Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),
+        "видео" or "videos" => Environment.GetFolderPath(Environment.SpecialFolder.MyVideos),
+        "загрузки" or "downloads" => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads"),
+        _ => null
+    };
 
     private static string NormalizeDirectoryPath(string path)
     {
