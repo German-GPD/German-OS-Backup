@@ -483,30 +483,44 @@ internal sealed class BackupEngine : IDisposable
         zipPath = Path.GetFullPath(zipPath);
         if (zipPath.StartsWith(sourceRoot.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("ZIP-архив нельзя сохранять внутрь папки, которую архивируем. Выбери другое место.");
         var level = PerformanceMode switch { "eco" => CompressionLevel.SmallestSize, "max" => CompressionLevel.Fastest, _ => CompressionLevel.Optimal };
-        await Task.Run(() =>
+        var tempZip = zipPath + ".gob-tmp-" + Guid.NewGuid().ToString("N");
+        try
         {
-            using var archive = ZipFile.Open(zipPath, ZipArchiveMode.Create);
-            var stack = new Stack<string>(); stack.Push(sourceRoot);
-            while (stack.Count > 0)
+            await Task.Run(() =>
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                var current = stack.Pop();
-                foreach (var dir in Directory.EnumerateDirectories(current)) { cancellationToken.ThrowIfCancellationRequested(); if ((File.GetAttributes(dir) & FileAttributes.ReparsePoint) == 0) stack.Push(dir); }
-                foreach (var file in Directory.EnumerateFiles(current))
+                using var archive = ZipFile.Open(tempZip, ZipArchiveMode.Create);
+                var stack = new Stack<string>(); stack.Push(sourceRoot);
+                while (stack.Count > 0)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    var attributes = File.GetAttributes(file);
-                    if ((attributes & FileAttributes.ReparsePoint) != 0 ||
-                        file.Contains(".gob-tmp-", StringComparison.OrdinalIgnoreCase) ||
-                        file.Contains(".gob-rust-", StringComparison.OrdinalIgnoreCase) ||
-                        file.EndsWith(".gob-restore-tmp", StringComparison.OrdinalIgnoreCase))
-                        continue;
-                    var relative = Path.GetRelativePath(sourceRoot, file).Replace(Path.DirectorySeparatorChar, '/');
-                    archive.CreateEntryFromFile(file, Path.GetFileName(sourceRoot) + "/" + relative, level);
+                    var current = stack.Pop();
+                    foreach (var dir in Directory.EnumerateDirectories(current))
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        if ((File.GetAttributes(dir) & FileAttributes.ReparsePoint) == 0) stack.Push(dir);
+                    }
+                    foreach (var file in Directory.EnumerateFiles(current))
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        var attributes = File.GetAttributes(file);
+                        if ((attributes & FileAttributes.ReparsePoint) != 0 ||
+                            file.Contains(".gob-tmp-", StringComparison.OrdinalIgnoreCase) ||
+                            file.Contains(".gob-rust-", StringComparison.OrdinalIgnoreCase) ||
+                            file.EndsWith(".gob-restore-tmp", StringComparison.OrdinalIgnoreCase))
+                            continue;
+                        var relative = Path.GetRelativePath(sourceRoot, file).Replace(Path.DirectorySeparatorChar, '/');
+                        archive.CreateEntryFromFile(file, Path.GetFileName(sourceRoot) + "/" + relative, level);
+                    }
                 }
-            }
-        }, cancellationToken).ConfigureAwait(false);
-        Log("ZIP-архив создан: " + zipPath);
+            }, cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            File.Move(tempZip, zipPath, true);
+            Log("ZIP-архив создан: " + zipPath);
+        }
+        finally
+        {
+            try { if (File.Exists(tempZip)) File.Delete(tempZip); } catch { }
+        }
     }
 
     private void UpdateSpeed()
