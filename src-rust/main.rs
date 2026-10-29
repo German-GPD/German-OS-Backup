@@ -351,7 +351,7 @@ impl eframe::App for BackupApp {
         egui::CentralPanel::default().frame(egui::Frame::new().fill(Color32::from_rgb(13,16,15)).inner_margin(egui::Margin::symmetric(22,10))).show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.heading(RichText::new("Состояние системы").size(21.0).color(Color32::WHITE));
-                ui.label(RichText::new(if self.last_stats.running { "● КОПИРОВАНИЕ" } else { "● ОЖИДАНИЕ" }).color(if self.last_stats.running { green } else { muted }).size(11.0));
+                ui.label(RichText::new(if self.stats.lock().map(|s| s.running).unwrap_or(true) { "● КОПИРОВАНИЕ" } else { "● ОЖИДАНИЕ" }).color(if self.stats.lock().map(|s| s.running).unwrap_or(true) { green } else { muted }).size(11.0));
             });
             ui.add_space(6.0);
             let setup_hint = if self.config.destination.is_empty() {
@@ -418,7 +418,7 @@ impl eframe::App for BackupApp {
                     if ui.selectable_label(self.config.performance_mode == value, label).clicked() { self.config.performance_mode = value.into(); self.save_config(); }
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if self.last_stats.running {
+                    if self.stats.lock().map(|s| s.running).unwrap_or(true) {
                         if ui.button("■ Остановить").clicked() { self.stop_backup(); }
                     } else if ui.add(egui::Button::new(RichText::new("▶ Начать копирование").color(Color32::from_rgb(13,16,15))).fill(green)).clicked() {
                         self.start_backup();
