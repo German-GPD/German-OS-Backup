@@ -474,7 +474,7 @@ internal sealed class DashboardForm : Form
             sourceCount = config.SelectedSources?.Count ?? 0,
             sourcePaths = config.SelectedSources ?? new List<string>(),
             autoUpdateSources = config.AutoUpdateSources ?? new List<string>(),
-            version = typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "1.4.1",
+            version = typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "1.4.2",
             cpuPercent = cpu,
             ramUsedGb = ram.UsedGb,
             ramTotalGb = ram.TotalGb,
