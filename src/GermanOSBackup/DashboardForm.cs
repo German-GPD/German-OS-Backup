@@ -517,6 +517,13 @@ button{border-radius:4px;padding:9px 12px}button:focus-visible{outline:2px solid
 button:disabled{opacity:.42;cursor:not-allowed;filter:saturate(.4)}.notice{box-shadow:inset 3px 0 var(--green)}
 @media(max-width:1000px){.shell{grid-template-columns:170px minmax(0,1fr)}.side{padding:18px 9px}.main{padding:20px 16px}}
 @media(max-width:700px){.side{position:static;height:auto;display:flex;flex-direction:row;align-items:center;overflow-x:auto;padding:10px;border-right:0;border-bottom:1px solid var(--line)}.brand{white-space:nowrap}.nav{display:flex;gap:4px}.nav button{white-space:nowrap}.side-note{display:none}.main{padding:16px 12px}.top h1{font-size:22px}.hero h2{font-size:20px}.status-pill{white-space:normal}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.section-grid{grid-template-columns:minmax(0,1fr)}.actions{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* Keyboard access, reduced motion and compact interaction feedback */
+:focus-visible{outline:2px solid var(--green);outline-offset:3px}
+button:active:not(:disabled){transform:translateY(1px)}
+button:disabled{opacity:.45;cursor:not-allowed}
+.source-paths{scrollbar-color:#526b58 #151b17;scrollbar-width:thin}
+::selection{background:#426d4c;color:#fff}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
 </style></head><body><div class="shell">
 <aside class="side"><div class="brand"><div class="mark">G_</div><span>German OS Backup C# Edition</span></div><nav class="nav"><button class="active" onclick="tab('overview')">▦　 Обзор</button><button onclick="act('sources')">▣　 Источники</button><button onclick="act('restore')">↶　 Восстановление</button><button onclick="act('verify')">✓　 Проверка целостности</button><button onclick="act('log')">≡　 Журнал событий</button></nav><div class="side-note"><b>Подсказка</b><p>Копия должна находиться на отдельном физическом диске, если нужно защититься от поломки накопителя.</p><button onclick="act('help')" style="width:100%">Все подсказки</button></div></aside>
 <main class="main"><header class="top"><div><div class="eyebrow">ЛОКАЛЬНАЯ ЗАЩИТА ФАЙЛОВ</div><h1>Обзор резервного копирования</h1></div><div class="top-actions"><button onclick="act('help')">? Помощь</button><button onclick="act('checkUpdates')">↻ Проверить обновления</button><button onclick="act('zip')">Создать ZIP</button><button onclick="act('scan')">Создать / обновить копию</button><button class="primary" onclick="act('sources')">Выбрать папки</button></div></header>
