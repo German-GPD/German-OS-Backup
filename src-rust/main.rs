@@ -44,6 +44,7 @@ impl Default for Config {
 #[derive(Default, Clone)]
 struct Stats {
     running: bool,
+    cancellable: bool,
     files_seen: u64,
     files_copied: u64,
     files_skipped: u64,
@@ -121,6 +122,10 @@ impl BackupApp {
     }
 
     fn start_backup(&mut self) {
+        if self.stats.lock().map(|s| s.running).unwrap_or(true) {
+            self.add_log("Другая операция ещё выполняется — дождись её завершения");
+            return;
+        }
         if self.config.destination.trim().is_empty() {
             self.add_log("Сначала выбери папку назначения");
             return;
@@ -129,17 +134,44 @@ impl BackupApp {
             self.add_log("Сначала добавь папки-источники");
             return;
         }
-        let dest = PathBuf::from(&self.config.destination);
-        if !dest.is_absolute() {
-            self.add_log("Путь назначения должен быть абсолютным");
+        let dest = match fs::canonicalize(&self.config.destination) {
+            Ok(path) => path,
+            Err(_) => { self.add_log("Не удалось открыть папку назначения — проверь путь и доступ"); return; }
+        };
+        let system_drive = std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into());
+        let system_root = PathBuf::from(format!("{}\\", system_drive.trim_end_matches(['\\', '/'])));
+        let dest_text = dest.to_string_lossy().to_lowercase();
+        let system_text = system_root.to_string_lossy().to_lowercase();
+        if dest_text.starts_with(&system_text) {
+            self.add_log("Для резервной копии выбери отдельный диск, не системный");
             return;
         }
+        let mut canonical_sources: Vec<PathBuf> = Vec::new();
+        let mut root_names: Vec<String> = Vec::new();
         for source in &self.config.sources {
-            let src = PathBuf::from(source);
-            if src == dest || src.starts_with(&dest) || dest.starts_with(&src) {
+            let src = match fs::canonicalize(source) {
+                Ok(path) if path.is_dir() => path,
+                _ => { self.add_log(&format!("Папка-источник недоступна: {source}")); return; }
+            };
+            let src_text = src.to_string_lossy().to_lowercase();
+            if src_text == dest_text || src_text.starts_with(&(dest_text.clone() + "\\")) || dest_text.starts_with(&(src_text.clone() + "\\")) {
                 self.add_log("Папка назначения пересекается с источником — копирование отменено");
                 return;
             }
+            if canonical_sources.iter().any(|other| {
+                let a = other.to_string_lossy().to_lowercase();
+                a == src_text || a.starts_with(&(src_text.clone() + "\\")) || src_text.starts_with(&(a + "\\"))
+            }) {
+                self.add_log("Источники пересекаются или повторяются — убери вложенные папки из списка");
+                return;
+            }
+            let root = src.file_name().unwrap_or_default().to_string_lossy().to_lowercase();
+            if root_names.iter().any(|name| name == &root) {
+                self.add_log("У двух источников одинаковое имя папки — переименуй один или выбери другой источник");
+                return;
+            }
+            root_names.push(root);
+            canonical_sources.push(src);
         }
         self.save_config();
         self.cancel.store(false, Ordering::SeqCst);
@@ -149,7 +181,7 @@ impl BackupApp {
         let performance_mode = self.config.performance_mode.clone();
         let destination = dest;
         if let Ok(mut s) = stats.lock() {
-            *s = Stats { running: true, status: "Подготовка к копированию…".into(), started: Some(SystemTime::now()), ..Default::default() };
+            *s = Stats { running: true, cancellable: true, status: "Подготовка к копированию…".into(), started: Some(SystemTime::now()), ..Default::default() };
         }
         self.add_log("Запущено копирование");
         thread::spawn(move || {
@@ -197,7 +229,7 @@ impl BackupApp {
                 }
             }
             if let Ok(mut s) = stats.lock() {
-                s.running = false; s.speed = 0;
+                s.running = false; s.cancellable = false; s.speed = 0;
                 s.status = if cancel.load(Ordering::SeqCst) { "Остановлено пользователем".into() }
                     else { "Копирование завершено".into() };
             }
@@ -205,6 +237,10 @@ impl BackupApp {
     }
 
     fn verify_backup(&mut self) {
+        if self.stats.lock().map(|s| s.running).unwrap_or(true) {
+            self.add_log("Другая операция ещё выполняется — дождись её завершения");
+            return;
+        }
         if self.config.destination.trim().is_empty() {
             self.add_log("Сначала выбери папку резервной копии");
             return;
@@ -212,7 +248,7 @@ impl BackupApp {
         let destination = PathBuf::from(&self.config.destination);
         let sources = self.config.sources.clone();
         let stats = self.stats.clone();
-        if let Ok(mut s) = stats.lock() { s.running = true; s.status = "Глубокая проверка SHA-256…".into(); }
+        if let Ok(mut s) = stats.lock() { s.running = true; s.cancellable = false; s.status = "Глубокая проверка SHA-256…".into(); }
         self.add_log("Запущена глубокая проверка SHA-256");
         thread::spawn(move || {
             let mut checked = 0u64; let mut missing = 0u64; let mut different = 0u64;
@@ -242,23 +278,27 @@ impl BackupApp {
                 }
             }
             if let Ok(mut s) = stats.lock() {
-                s.running = false;
+                s.running = false; s.cancellable = false;
                 s.status = format!("Проверка завершена · проверено {checked}, отсутствует {missing}, различается {different}");
             }
         });
     }
 
     fn restore_missing(&mut self) {
+        if self.stats.lock().map(|s| s.running).unwrap_or(true) {
+            self.add_log("Другая операция ещё выполняется — дождись её завершения");
+            return;
+        }
         let backup = rfd::FileDialog::new().set_title("Выбери корень резервной копии").pick_folder();
         let Some(backup) = backup else { return; };
         let target = rfd::FileDialog::new().set_title("Куда восстановить отсутствующие файлы").pick_folder();
         let Some(target) = target else { return; };
-        if backup == target || target.starts_with(&backup) {
-            self.add_log("Папка восстановления не должна находиться внутри резервной копии");
+        if backup == target || target.starts_with(&backup) || backup.starts_with(&target) {
+            self.add_log("Папка источника и папка восстановления не должны пересекаться");
             return;
         }
         let stats = self.stats.clone();
-        if let Ok(mut s) = stats.lock() { s.running = true; s.status = "Восстановление отсутствующих файлов…".into(); }
+        if let Ok(mut s) = stats.lock() { s.running = true; s.cancellable = false; s.status = "Восстановление отсутствующих файлов…".into(); }
         self.add_log("Запущено восстановление без перезаписи существующих файлов");
         thread::spawn(move || {
             let mut restored = 0u64; let mut skipped = 0u64; let mut errors = 0u64;
@@ -271,7 +311,7 @@ impl BackupApp {
                 match fs::copy(entry.path(), &out) { Ok(_) => restored += 1, Err(_) => errors += 1 }
             }
             if let Ok(mut s) = stats.lock() {
-                s.running = false;
+                s.running = false; s.cancellable = false;
                 s.status = format!("Восстановлено {restored} · пропущено {skipped} · ошибок {errors}");
                 s.files_copied += restored; s.errors += errors;
             }
@@ -279,6 +319,10 @@ impl BackupApp {
     }
 
     fn create_zip(&mut self) {
+        if self.stats.lock().map(|s| s.running).unwrap_or(true) {
+            self.add_log("Другая операция ещё выполняется — дождись её завершения");
+            return;
+        }
         if self.config.destination.trim().is_empty() || !Path::new(&self.config.destination).is_dir() {
             self.add_log("Сначала создай резервную копию: выбери папку назначения и нажми «Начать копирование»");
             return;
@@ -287,7 +331,7 @@ impl BackupApp {
         let Some(output) = rfd::FileDialog::new().set_title("Сохранить ZIP-архив резервной копии").add_filter("ZIP-архив", &["zip"]).set_file_name("GermanOSBackup.zip").save_file() else { return; };
         if output.starts_with(&source) { self.add_log("ZIP-архив нельзя сохранять внутри папки резервной копии"); return; }
         let stats = self.stats.clone();
-        if let Ok(mut s) = stats.lock() { s.running = true; s.status = "Создание ZIP-архива…".into(); }
+        if let Ok(mut s) = stats.lock() { s.running = true; s.cancellable = false; s.status = "Создание ZIP-архива…".into(); }
         self.add_log("Создание ZIP-архива запущено вручную");
         thread::spawn(move || {
             let result = (|| -> Result<u64, Box<dyn std::error::Error + Send + Sync>> {
@@ -309,7 +353,7 @@ impl BackupApp {
                 Ok(count)
             })();
             if let Ok(mut s) = stats.lock() {
-                s.running = false;
+                s.running = false; s.cancellable = false;
                 s.status = match result { Ok(count) => format!("ZIP-архив создан · файлов: {count}"), Err(ref e) => format!("Ошибка создания ZIP: {e}") };
             }
         });
@@ -418,8 +462,11 @@ impl eframe::App for BackupApp {
                     if ui.selectable_label(self.config.performance_mode == value, label).clicked() { self.config.performance_mode = value.into(); self.save_config(); }
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if self.stats.lock().map(|s| s.running).unwrap_or(true) {
+                    let (running, cancellable) = self.stats.lock().map(|s| (s.running, s.cancellable)).unwrap_or((true, false));
+                    if running && cancellable {
                         if ui.button("■ Остановить").clicked() { self.stop_backup(); }
+                    } else if running {
+                        ui.label(RichText::new("Операция выполняется…").color(muted).size(11.0));
                     } else if ui.add(egui::Button::new(RichText::new("▶ Начать копирование").color(Color32::from_rgb(13,16,15))).fill(green)).clicked() {
                         self.start_backup();
                     }
