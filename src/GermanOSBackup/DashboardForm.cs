@@ -93,7 +93,7 @@ internal sealed class DashboardForm : Form
                     {
                         File.AppendAllText(Program.LogPath, $"[{DateTime.Now:O}] WebView2 navigation failed: {args.WebErrorStatus}{Environment.NewLine}");
                         MessageBox.Show(this, "Web-интерфейс не загрузился: " + args.WebErrorStatus +
-                            "\\nПодробности записаны в журнал: " + Program.LogPath,
+                            "\nПодробности записаны в журнал: " + Program.LogPath,
                             "German OS Backup", MessageBoxButtons.OK, MessageBoxIcon.Error);
                         return;
                     }
@@ -106,10 +106,10 @@ internal sealed class DashboardForm : Form
             {
                 File.AppendAllText(Program.LogPath, $"[{DateTime.Now:O}] WebView2 initialization failed: {ex}{Environment.NewLine}");
                 MessageBox.Show(this,
-                    "Не удалось запустить WebView2.\\n\\n" +
-                    ex.Message + "\\n\\n" +
+                    "Не удалось запустить WebView2.\n\n" +
+                    ex.Message + "\n\n" +
                     "Проверь журнал: " + Program.LogPath +
-                    "\\n\\nЕсли Runtime уже установлен, это может быть проблема профиля WebView2 или его прав доступа.",
+                    "\n\nЕсли Runtime уже установлен, это может быть проблема профиля WebView2 или его прав доступа.",
                     "German OS Backup", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
 
