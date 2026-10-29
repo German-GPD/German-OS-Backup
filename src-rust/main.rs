@@ -644,6 +644,7 @@ fn apply_mica_backdrop(_window: &winit::window::Window) {}
 
 struct WebUiHost {
     backend: BackupApp,
+    accent_color: String,
     window: Option<winit::window::Window>,
     webview: Option<wry::WebView>,
     sender: std::sync::mpsc::Sender<String>,
@@ -656,6 +657,7 @@ impl WebUiHost {
         let (sender, receiver) = std::sync::mpsc::channel();
         Self {
             backend: BackupApp::new_webview(),
+            accent_color: system_accent_hex(),
             window: None,
             webview: None,
             sender,
@@ -709,7 +711,7 @@ impl WebUiHost {
             "ramTotalGb": self.backend.memory_total as f64 / 1_073_741_824.0,
             "ramPercent": self.backend.memory,
             "performanceMode": self.backend.config.performance_mode,
-            "accentColor": system_accent_hex()
+            "accentColor": self.accent_color
         });
         let _ = webview.evaluate_script(&format!("window.updateStats({payload});"));
     }
