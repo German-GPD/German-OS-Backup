@@ -54,7 +54,7 @@ const
   RuntimeId = '{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}';
 begin
   Result :=
-    HasWebView2Version(HKLM, 'SOFTWARE\\WOW6432Node\\Microsoft\\EdgeUpdate\\Clients\\' + RuntimeId) or
-    HasWebView2Version(HKLM, 'SOFTWARE\\Microsoft\\EdgeUpdate\\Clients\\' + RuntimeId) or
-    HasWebView2Version(HKCU, 'Software\\Microsoft\\EdgeUpdate\\Clients\\' + RuntimeId);
+    HasWebView2Version(HKLM, 'SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\' + RuntimeId) or
+    HasWebView2Version(HKLM, 'SOFTWARE\Microsoft\EdgeUpdate\Clients\' + RuntimeId) or
+    HasWebView2Version(HKCU, 'Software\Microsoft\EdgeUpdate\Clients\' + RuntimeId);
 end;
