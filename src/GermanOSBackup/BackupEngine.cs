@@ -403,12 +403,21 @@ internal sealed class BackupEngine : IDisposable
                     }
                     temp = target + ".gob-tmp-" + Environment.ProcessId + "-" + Guid.NewGuid().ToString("N");
                     long written = 0;
-                    if (RustBackupEngine.TryCopyFile(source, temp, out written))
+                    // Small game-save/config files are copied by Rust. Large files and
+                    // Eco mode stay on the cancellable asynchronous managed path.
+                    var rustResult = src.Length <= 64L * 1024 * 1024 && mode != "eco"
+                        ? await Task.Run(() =>
+                        {
+                            var success = RustBackupEngine.TryCopyFile(source, temp, out var copiedBytes);
+                            return (Success: success, Bytes: copiedBytes);
+                        }, ct)
+                        : (Success: false, Bytes: 0L);
+                    if (rustResult.Success)
                     {
+                        written = rustResult.Bytes;
                         ct.ThrowIfCancellationRequested();
                         Interlocked.Add(ref bytesInWindow, written);
                         UpdateSpeed();
-                        if (mode == "eco") await Task.Delay(8, ct);
                     }
                     else
                     {
