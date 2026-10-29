@@ -116,12 +116,12 @@ mod tests {
             .expect("clock must be after Unix epoch")
             .as_nanos();
         let root = std::env::temp_dir().join(format!(
-            "gob-native-engine-test-{}-{stamp}",
+            "gob-native-engine-test-{}-{stamp}-тест",
             std::process::id()
         ));
         fs::create_dir_all(&root).expect("create test directory");
-        let source = root.join("source-save.dat");
-        let target = root.join("nested").join("backup-save.dat");
+        let source = root.join("исходное-сохранение.dat");
+        let target = root.join("nested").join("резервная-копия.dat");
         let payload = b"German OS Backup native Rust test payload";
         fs::write(&source, payload).expect("write source");
         fs::create_dir_all(target.parent().expect("target parent")).expect("create target parent");
@@ -135,6 +135,43 @@ mod tests {
 
         assert_eq!(result, 0, "native copy must succeed");
         assert_eq!(fs::read(&target).expect("read destination"), payload);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn rejects_null_paths_without_dereferencing() {
+        // SAFETY: the function is expected to reject null pointers before reading them.
+        let result = unsafe { gob_copy_file_utf16(std::ptr::null(), std::ptr::null()) };
+        assert_eq!(result, 87);
+    }
+
+    #[test]
+    fn missing_source_does_not_replace_existing_backup() {
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock must be after Unix epoch")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "gob-native-engine-missing-{}-{stamp}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&root).expect("create test directory");
+        let source = root.join("missing-source.dat");
+        let target = root.join("existing-backup.dat");
+        let original_backup = b"keep this known-good backup";
+        fs::write(&target, original_backup).expect("write existing backup");
+        let source_wide = wide(&source);
+        let target_wide = wide(&target);
+
+        // SAFETY: both buffers are valid, NUL-terminated UTF-16 paths.
+        let result = unsafe { gob_copy_file_utf16(source_wide.as_ptr(), target_wide.as_ptr()) };
+
+        assert_ne!(result, 0, "copying a missing source must fail");
+        assert_eq!(
+            fs::read(&target).expect("read existing backup"),
+            original_backup,
+            "a failed copy must preserve the previous backup"
+        );
         let _ = fs::remove_dir_all(root);
     }
 }
