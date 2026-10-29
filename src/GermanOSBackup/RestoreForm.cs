@@ -78,7 +78,7 @@ internal sealed class RestoreForm : Form
                 {
                     cancel.Token.ThrowIfCancellationRequested();
                     var relative = Path.GetRelativePath(source, file);
-                    var destination = Path.GetFullPath(Path.Combine(target, relative));
+                    var destination = ResolveRestoreDestination(target, relative);
                     if (!IsSameOrNested(destination, target) || string.Equals(destination, target, StringComparison.OrdinalIgnoreCase))
                     {
                         Interlocked.Increment(ref errors);
@@ -119,6 +119,42 @@ internal sealed class RestoreForm : Form
         catch (OperationCanceledException) { summary.Text = $"Остановлено. Восстановлено: {restored:N0}; пропущено: {skipped:N0}; ошибок: {errors:N0}."; }
         catch (Exception ex) { summary.Text = "Не удалось выполнить восстановление."; MessageBox.Show(this, ex.Message, "Ошибка восстановления", MessageBoxButtons.OK, MessageBoxIcon.Error); }
         finally { running = false; restore.Enabled = true; }
+    }
+
+    private static string ResolveRestoreDestination(string target, string relative)
+    {
+        var normalizedTarget = NormalizeDirectoryPath(target);
+        var root = Path.GetPathRoot(normalizedTarget);
+        // When a drive root is selected, map standard backup roots back to the
+        // actual Windows Known Folder. This avoids creating C:\\Изображения, etc.
+        if (string.Equals(normalizedTarget, root, StringComparison.OrdinalIgnoreCase))
+        {
+            var parts = relative.Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, 2,
+                StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length > 0)
+            {
+                var knownFolder = parts[0].ToLowerInvariant() switch
+                {
+                    "рабочий стол" or "desktop" => Environment.SpecialFolder.DesktopDirectory,
+                    "документы" or "documents" => Environment.SpecialFolder.MyDocuments,
+                    "изображения" or "pictures" or "рисунки" => Environment.SpecialFolder.MyPictures,
+                    "видео" or "videos" => Environment.SpecialFolder.MyVideos,
+                    "загрузки" or "downloads" => (Environment.SpecialFolder?)null,
+                    _ => (Environment.SpecialFolder?)null
+                };
+                var basePath = knownFolder.HasValue
+                    ? Environment.GetFolderPath(knownFolder.Value)
+                    : parts[0].Equals("загрузки", StringComparison.OrdinalIgnoreCase) || parts[0].Equals("downloads", StringComparison.OrdinalIgnoreCase)
+                        ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads")
+                        : "";
+                if (!string.IsNullOrWhiteSpace(basePath))
+                {
+                    var remainder = Path.GetRelativePath(parts[0], relative);
+                    return Path.GetFullPath(Path.Combine(basePath, remainder == "." ? "" : remainder));
+                }
+            }
+        }
+        return Path.GetFullPath(Path.Combine(target, relative));
     }
 
     private static string NormalizeDirectoryPath(string path)
