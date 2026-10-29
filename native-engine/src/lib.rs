@@ -44,6 +44,9 @@ pub unsafe extern "system" fn gob_copy_file_utf16(source: *const u16, target: *c
     let temp = PathBuf::from(temp_name);
 
     let result = (|| -> io::Result<()> {
+        if let Some(parent) = dst.parent() {
+            fs::create_dir_all(parent)?;
+        }
         fs::copy(&src, &temp)?;
         let temp_wide = wide_path(&temp);
         let dst_wide = wide_path(&dst);
@@ -98,7 +101,8 @@ mod tests {
         let target = root.join("nested").join("backup-save.dat");
         let payload = b"German OS Backup native Rust test payload";
         fs::write(&source, payload).expect("write source");
-        fs::write(&target, b"old data").ok();
+        fs::create_dir_all(target.parent().expect("target parent")).expect("create target parent");
+        fs::write(&target, b"old data").expect("write old destination");
         let source_wide = wide(&source);
         let target_wide = wide(&target);
 
