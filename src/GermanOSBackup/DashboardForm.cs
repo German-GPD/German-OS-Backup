@@ -264,7 +264,7 @@ internal sealed class DashboardForm : Form
                     }
                 }
             }
-            if (string.IsNullOrWhiteSpace(downloadUrl) || !Uri.TryCreate(downloadUrl, UriKind.Absolute, out var parsedUrl) || parsedUrl.Host != "github.com")
+            if (string.IsNullOrWhiteSpace(downloadUrl) || !Uri.TryCreate(downloadUrl, UriKind.Absolute, out var parsedUrl) || parsedUrl.Scheme != Uri.UriSchemeHttps || parsedUrl.Host != "github.com" || !parsedUrl.AbsolutePath.StartsWith("/German-GPD/German-OS-Backup/releases/download/", StringComparison.Ordinal))
             {
                 MessageBox.Show(this, "В последнем релизе не найден официальный установщик Windows x64.", "Обновление недоступно", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
