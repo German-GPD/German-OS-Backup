@@ -1,6 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use directories::ProjectDirs;
 use eframe::egui::{self, Color32, RichText, Stroke, Vec2};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -148,7 +147,7 @@ impl BackupApp {
             })
             .collect::<Vec<_>>();
         let stats = self.stats.clone();
-        if sources.is_empty() || destination.trim().is_empty() { return; }
+        if sources.is_empty() { return; }
         thread::spawn(move || {
             use notify::{RecommendedWatcher, RecursiveMode, Watcher};
             use std::sync::mpsc::{channel, RecvTimeoutError};
@@ -528,6 +527,7 @@ impl eframe::App for BackupApp {
         });
 
         egui::CentralPanel::default().frame(egui::Frame::new().fill(Color32::from_rgb(13,16,15)).inner_margin(egui::Margin::symmetric(22,10))).show(ctx, |ui| {
+            egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.heading(RichText::new("Состояние системы").size(21.0).color(Color32::WHITE));
                 ui.label(RichText::new(if self.stats.lock().map(|s| s.running).unwrap_or(true) { "● КОПИРОВАНИЕ" } else { "● ОЖИДАНИЕ" }).color(if self.stats.lock().map(|s| s.running).unwrap_or(true) { green } else { muted }).size(11.0));
@@ -543,6 +543,20 @@ impl eframe::App for BackupApp {
             panel(ui, "БЫСТРАЯ НАСТРОЙКА", |ui| {
                 ui.label(RichText::new(setup_hint).color(if self.config.destination.is_empty() || self.config.sources.is_empty() { Color32::from_rgb(244, 202, 120) } else { green }).size(11.0).strong());
             });
+            if self.last_stats.running {
+                ui.add_space(6.0);
+                panel(ui, "ТЕКУЩАЯ ОПЕРАЦИЯ", |ui| {
+                    ui.horizontal(|ui| {
+                        ui.spinner();
+                        ui.label(RichText::new(&self.last_stats.status).color(Color32::WHITE).size(12.0));
+                    });
+                    ui.add_space(5.0);
+                    ui.add(egui::ProgressBar::new(0.0).fill(green).desired_height(5.0).animate(true));
+                    if self.last_stats.files_seen > 0 {
+                        ui.label(RichText::new(format!("Обработано файлов: {}", self.last_stats.files_seen)).color(muted).size(10.0));
+                    }
+                });
+            }
             ui.add_space(8.0);
             ui.columns(4, |cols| {
                 metric(&mut cols[0], "ФАЙЛЫ СКОПИРОВАНЫ", &self.last_stats.files_copied.to_string(), green);
@@ -631,6 +645,7 @@ impl eframe::App for BackupApp {
             });
             ui.add_space(5.0);
             ui.label(RichText::new(format!("German OS Backup Rust Edition v{VERSION} · Windows · локальная работа · без телеметрии")).color(muted).size(10.0));
+            });
         });
     }
 }
