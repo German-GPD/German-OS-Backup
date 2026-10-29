@@ -90,7 +90,7 @@ internal sealed class BackupEngine : IDisposable
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             Path.Combine(home, "AppData", "LocalLow"),
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            Environment.GetFolderPath(Environment.SpecialFolder.SavedGames)
+            Path.Combine(home, "Saved Games")
         };
         return candidates
             .Where(path => !string.IsNullOrWhiteSpace(path) && Directory.Exists(path))
