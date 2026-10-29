@@ -26,6 +26,7 @@ RestartApplications=no
 
 [Files]
 Source: "..\publish\GermanOSBackup.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\publish\german_os_backup_engine.dll"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\German OS Backup"; Filename: "{app}\{#AppExeName}"
