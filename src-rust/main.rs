@@ -130,10 +130,18 @@ impl BackupApp {
         self.watcher_cancel.store(true, Ordering::SeqCst);
         let cancel = Arc::new(AtomicBool::new(false));
         self.watcher_cancel = cancel.clone();
+        let destination = match fs::canonicalize(&self.config.destination) {
+            Ok(path) => path,
+            Err(_) => return,
+        };
         let sources = self.config.sources.iter()
             .filter(|s| self.config.auto_update_sources.iter().any(|a| a.eq_ignore_ascii_case(s)))
-            .cloned().collect::<Vec<_>>();
-        let destination = self.config.destination.clone();
+            .filter_map(|s| fs::canonicalize(s).ok().filter(|p| p.is_dir()).map(|p| p.to_string_lossy().to_string()))
+            .filter(|s| {
+                let source = Path::new(s);
+                !source.starts_with(&destination) && !destination.starts_with(source)
+            })
+            .collect::<Vec<_>>();
         let stats = self.stats.clone();
         if sources.is_empty() || destination.trim().is_empty() { return; }
         thread::spawn(move || {
@@ -520,7 +528,7 @@ impl eframe::App for BackupApp {
                     ui.add_space(5.0);
                     if ui.button("Выбрать папку назначения…").clicked() {
                         if let Some(path) = rfd::FileDialog::new().set_title("Папка резервной копии").pick_folder() {
-                            self.config.destination = path.to_string_lossy().to_string(); self.save_config();
+                            self.config.destination = path.to_string_lossy().to_string(); self.save_config(); self.restart_auto_watchers();
                         }
                     }
                 });
