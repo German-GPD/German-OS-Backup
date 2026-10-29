@@ -530,7 +530,14 @@ impl eframe::App for BackupApp {
             egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.heading(RichText::new("Состояние системы").size(21.0).color(Color32::WHITE));
-                ui.label(RichText::new(if self.stats.lock().map(|s| s.running).unwrap_or(true) { "● КОПИРОВАНИЕ" } else { "● ОЖИДАНИЕ" }).color(if self.stats.lock().map(|s| s.running).unwrap_or(true) { green } else { muted }).size(11.0));
+                let (status_label, status_color) = if self.last_stats.running {
+                    ("● В РАБОТЕ", green)
+                } else if self.last_stats.errors > 0 {
+                    ("● ПРОВЕРЬ ЖУРНАЛ", Color32::from_rgb(244, 202, 120))
+                } else {
+                    ("● ГОТОВО", muted)
+                };
+                ui.label(RichText::new(status_label).color(status_color).size(11.0).strong());
             });
             ui.add_space(6.0);
             let setup_hint = if self.config.destination.is_empty() {
@@ -551,10 +558,10 @@ impl eframe::App for BackupApp {
                         ui.label(RichText::new(&self.last_stats.status).color(Color32::WHITE).size(12.0));
                     });
                     ui.add_space(5.0);
-                    ui.add(egui::ProgressBar::new(0.0).fill(green).desired_height(5.0).animate(true));
                     if self.last_stats.files_seen > 0 {
                         ui.label(RichText::new(format!("Обработано файлов: {}", self.last_stats.files_seen)).color(muted).size(10.0));
                     }
+                    ui.label(RichText::new("Операция выполняется в фоне; точный процент появится после подсчёта общего числа файлов.").color(muted).size(10.0));
                 });
             }
             ui.add_space(8.0);
