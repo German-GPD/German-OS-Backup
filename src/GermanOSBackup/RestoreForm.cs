@@ -129,11 +129,10 @@ internal sealed class RestoreForm : Form
         };
         selectNone.Click += (_, _) =>
         {
-            foreach (ListViewItem item in files.Items)
-            {
-                if (item.Tag is string path) checkedPaths.Remove(path);
-                item.Checked = false;
-            }
+            checkedPaths.Clear();
+            loading = true;
+            foreach (ListViewItem item in files.Items) item.Checked = false;
+            loading = false;
             UpdateStatus();
         };
         files.ItemChecked += (_, e) =>
