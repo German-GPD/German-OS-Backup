@@ -993,8 +993,8 @@ mod regression_tests {
     fn shared_dashboard_contains_the_webview_bridge_and_core_panels() {
         let html = include_str!("../dashboard.html");
         for required in [
-            "window.updateStats",
-            "window.setNotice",
+            "function updateStats",
+            "function setNotice",
             "sourcePaths",
             "destination",
             "chart",
