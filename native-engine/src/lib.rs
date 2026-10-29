@@ -17,7 +17,10 @@ const MOVEFILE_WRITE_THROUGH: u32 = 0x8;
 
 fn wide_path(path: &PathBuf) -> Vec<u16> {
     use std::os::windows::ffi::OsStrExt;
-    path.as_os_str().encode_wide().chain(std::iter::once(0)).collect()
+    path.as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect()
 }
 
 /// Copies one file to a temporary sibling and replaces the destination only
@@ -25,7 +28,9 @@ fn wide_path(path: &PathBuf) -> Vec<u16> {
 #[no_mangle]
 pub unsafe extern "system" fn gob_copy_file_utf16(source: *const u16, target: *const u16) -> i32 {
     if source.is_null() || target.is_null() {
-        unsafe { SetLastError(87); }
+        unsafe {
+            SetLastError(87);
+        }
         return 87;
     }
 
@@ -36,8 +41,12 @@ pub unsafe extern "system" fn gob_copy_file_utf16(source: *const u16, target: *c
         return 87;
     }
 
-    let src = PathBuf::from(std::ffi::OsString::from_wide(std::slice::from_raw_parts(source, source_len)));
-    let dst = PathBuf::from(std::ffi::OsString::from_wide(std::slice::from_raw_parts(target, target_len)));
+    let src = PathBuf::from(std::ffi::OsString::from_wide(std::slice::from_raw_parts(
+        source, source_len,
+    )));
+    let dst = PathBuf::from(std::ffi::OsString::from_wide(std::slice::from_raw_parts(
+        target, target_len,
+    )));
     let id = NEXT_TEMP.fetch_add(1, Ordering::Relaxed);
     let mut temp_name = dst.as_os_str().to_os_string();
     temp_name.push(format!(".gob-rust-{}-{}", std::process::id(), id));
@@ -50,10 +59,18 @@ pub unsafe extern "system" fn gob_copy_file_utf16(source: *const u16, target: *c
         fs::copy(&src, &temp)?;
         let temp_wide = wide_path(&temp);
         let dst_wide = wide_path(&dst);
-        let moved = unsafe { MoveFileExW(temp_wide.as_ptr(), dst_wide.as_ptr(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) };
+        let moved = unsafe {
+            MoveFileExW(
+                temp_wide.as_ptr(),
+                dst_wide.as_ptr(),
+                MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+            )
+        };
         if moved == 0 {
             let code = std::io::Error::last_os_error().raw_os_error().unwrap_or(1) as u32;
-            unsafe { SetLastError(code); }
+            unsafe {
+                SetLastError(code);
+            }
             let _ = fs::remove_file(&temp);
             return Err(io::Error::from_raw_os_error(code as i32));
         }
@@ -71,7 +88,6 @@ pub unsafe extern "system" fn gob_copy_file_utf16(source: *const u16, target: *c
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::gob_copy_file_utf16;
@@ -83,7 +99,10 @@ mod tests {
     };
 
     fn wide(path: &Path) -> Vec<u16> {
-        path.as_os_str().encode_wide().chain(std::iter::once(0)).collect()
+        path.as_os_str()
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect()
     }
 
     #[test]
@@ -108,9 +127,7 @@ mod tests {
 
         // SAFETY: both buffers are NUL-terminated UTF-16 paths and stay alive
         // for the duration of the native call.
-        let result = unsafe {
-            gob_copy_file_utf16(source_wide.as_ptr(), target_wide.as_ptr())
-        };
+        let result = unsafe { gob_copy_file_utf16(source_wide.as_ptr(), target_wide.as_ptr()) };
 
         assert_eq!(result, 0, "native copy must succeed");
         assert_eq!(fs::read(&target).expect("read destination"), payload);
