@@ -161,10 +161,13 @@ internal sealed class BackupEngine : IDisposable
         try
         {
             stats.IsScanning = true;
-            foreach (var (_, source, targetRoot) in ConfiguredSources())
+            var sources = ConfiguredSources().ToList();
+            var availableSources = sources.Where(item => Directory.Exists(item.Path)).ToList();
+            if (availableSources.Count == 0)
+                throw new DirectoryNotFoundException("Ни одна выбранная папка не найдена. Открой «Источники» и проверь пути.");
+            foreach (var (_, source, targetRoot) in availableSources)
             {
                 ct.ThrowIfCancellationRequested();
-                if (!Directory.Exists(source)) continue;
                 var stack = new Stack<(string Source, string Target)>();
                 stack.Push((source, targetRoot));
                 while (stack.Count > 0)
@@ -250,10 +253,15 @@ internal sealed class BackupEngine : IDisposable
             var startedAt = DateTime.UtcNow;
             try
             {
-                foreach (var (name, source, targetRoot) in ConfiguredSources())
+                var sources = ConfiguredSources().ToList();
+                var availableSources = sources.Where(item => Directory.Exists(item.Path)).ToList();
+                if (availableSources.Count == 0)
+                    throw new DirectoryNotFoundException("Ни одна выбранная папка не найдена. Открой «Источники» и проверь пути.");
+
+                foreach (var (name, source, targetRoot) in availableSources)
                 {
                     operation.Token.ThrowIfCancellationRequested();
-                    if (Directory.Exists(source)) await CopyTreeAsync(name, source, targetRoot, operation.Token).ConfigureAwait(false);
+                    await CopyTreeAsync(name, source, targetRoot, operation.Token).ConfigureAwait(false);
                 }
 
                 if (!stop.IsCancellationRequested) stats.HasCompletedInitialScan = true;
