@@ -215,6 +215,11 @@ impl BackupApp {
                     if let Some(parent) = target.parent() { if fs::create_dir_all(parent).is_err() { if let Ok(mut s) = stats.lock() { s.errors += 1; } continue; } }
                     match fs::copy(path, &target) {
                         Ok(n) => {
+                            if let Ok(modified) = source_meta.modified() {
+                                if filetime::set_file_mtime(&target, filetime::FileTime::from_system_time(modified)).is_err() {
+                                    if let Ok(mut s) = stats.lock() { s.errors += 1; }
+                                }
+                            }
                             total_bytes += n; window_bytes += n;
                             if let Ok(mut s) = stats.lock() { s.files_copied += 1; s.bytes_copied = total_bytes; }
                             if performance_mode == "eco" { thread::sleep(Duration::from_millis(25)); }
