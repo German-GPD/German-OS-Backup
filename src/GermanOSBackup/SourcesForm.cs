@@ -48,7 +48,7 @@ internal sealed class SourcesForm : Form
                         sourceFull.StartsWith(destination + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
                     {
                         MessageBox.Show(this,
-                            $"Папка копии не должна совпадать с выбранным источником, находиться внутри него или быть его родительской папкой.\\n\\nИсточник: {sourceFull}\\nПапка копии: {destination}",
+                            $"Папка копии не должна совпадать с выбранным источником, находиться внутри него или быть его родительской папкой.\n\nИсточник: {sourceFull}\nПапка копии: {destination}",
                             "Небезопасный путь", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                         return;
                     }
