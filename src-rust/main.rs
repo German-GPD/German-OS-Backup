@@ -865,7 +865,7 @@ mod regression_tests {
         let profile = std::env::var("USERPROFILE").expect("Windows user profile");
         let target = PathBuf::from(format!("{}\\\\", std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into())));
         let relative = Path::new("Documents").join("School").join("notes.txt");
-        let backup = PathBuf::from(r"D:\\Backup\\Documents");
+        let backup = PathBuf::from(r"D:\Backup\Documents");
 
         let actual = restore_destination(&target, &relative, &backup);
         let expected = PathBuf::from(profile).join("Documents").join("School").join("notes.txt");
