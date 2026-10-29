@@ -467,7 +467,7 @@ internal sealed class DashboardForm : Form
             ramTotalGb = ram.TotalGb,
             ramPercent = ram.Percent,
             performanceMode = engine.PerformanceMode,
-            accentColor = GetSystemAccentHex()
+            accentColor = SystemAccentHex
         });
         _ = web.CoreWebView2.ExecuteScriptAsync($"window.updateStats({payload});");
     }
@@ -507,6 +507,8 @@ internal sealed class DashboardForm : Form
         tray.Visible = false; tray.Dispose(); engine.Dispose();
         base.OnFormClosed(e);
     }
+
+    private static readonly string SystemAccentHex = GetSystemAccentHex();
 
     private static string GetSystemAccentHex()
     {
