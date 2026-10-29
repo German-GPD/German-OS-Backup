@@ -28,7 +28,7 @@ internal sealed class DashboardForm : Form
         this.config = config;
         this.startHidden = startHidden;
         engine = new BackupEngine(config, Program.LogPath);
-        Text = "German OS Backup C# Edition";
+        Text = "German OS Backup";
         ClientSize = new Size(1180, 820);
         MinimumSize = new Size(900, 680);
         StartPosition = FormStartPosition.CenterScreen;
@@ -36,7 +36,7 @@ internal sealed class DashboardForm : Form
         Font = new Font("Segoe UI", 10F);
 
         var menu = new ContextMenuStrip();
-        menu.Items.Add("Открыть German OS Backup C# Edition", null, (_, _) => ShowWindow());
+        menu.Items.Add("Открыть German OS Backup", null, (_, _) => ShowWindow());
         menu.Items.Add("Выбрать папки для копирования…", null, async (_, _) => await ShowSourcesAsync());
         menu.Items.Add("Проверить сейчас", null, async (_, _) => await engine.RequestScanAsync());
         menu.Items.Add("Остановить текущую операцию", null, (_, _) => engine.StopCurrentScan());
@@ -48,7 +48,7 @@ internal sealed class DashboardForm : Form
         menu.Items.Add("Выход", null, (_, _) => { allowClose = true; Close(); });
         tray = new NotifyIcon
         {
-            Text = "German OS Backup C# Edition",
+            Text = "German OS Backup",
             Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? SystemIcons.Shield,
             ContextMenuStrip = menu,
             Visible = true
@@ -84,7 +84,7 @@ internal sealed class DashboardForm : Form
                     }
                     catch (Exception ex)
                     {
-                        MessageBox.Show(this, ex.Message, "German OS Backup C# Edition", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        MessageBox.Show(this, ex.Message, "German OS Backup", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     }
                 };
                 web.CoreWebView2.NavigationCompleted += (_, args) =>
@@ -94,7 +94,7 @@ internal sealed class DashboardForm : Form
                         File.AppendAllText(Program.LogPath, $"[{DateTime.Now:O}] WebView2 navigation failed: {args.WebErrorStatus}{Environment.NewLine}");
                         MessageBox.Show(this, "Web-интерфейс не загрузился: " + args.WebErrorStatus +
                             "\\nПодробности записаны в журнал: " + Program.LogPath,
-                            "German OS Backup C# Edition", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            "German OS Backup", MessageBoxButtons.OK, MessageBoxIcon.Error);
                         return;
                     }
                     webReady = true;
@@ -110,7 +110,7 @@ internal sealed class DashboardForm : Form
                     ex.Message + "\\n\\n" +
                     "Проверь журнал: " + Program.LogPath +
                     "\\n\\nЕсли Runtime уже установлен, это может быть проблема профиля WebView2 или его прав доступа.",
-                    "German OS Backup C# Edition", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    "German OS Backup", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
 
             if (startHidden) Hide();
@@ -128,7 +128,7 @@ internal sealed class DashboardForm : Form
             {
                 e.Cancel = true;
                 Hide();
-                tray.ShowBalloonTip(1800, "German OS Backup C# Edition", "Работа продолжается в фоне. Открой приложение через значок в трее.", ToolTipIcon.Info);
+                tray.ShowBalloonTip(1800, "German OS Backup", "Работа продолжается в фоне. Открой приложение через значок в трее.", ToolTipIcon.Info);
             }
         };
     }
@@ -269,7 +269,7 @@ internal sealed class DashboardForm : Form
             if (latestVersion <= currentVersion)
             {
                 details("Установлена последняя версия " + currentVersion.ToString(3) + ".");
-                MessageBox.Show(this, "У тебя уже актуальная версия German OS Backup C# Edition " + currentVersion.ToString(3) + ".", "Обновления", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(this, "У тебя уже актуальная версия German OS Backup " + currentVersion.ToString(3) + ".", "Обновления", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
             string? downloadUrl = null;
@@ -294,7 +294,7 @@ internal sealed class DashboardForm : Form
                 return;
             }
             if (MessageBox.Show(this,
-                $"Доступна German OS Backup C# Edition {latestVersion}. Сейчас установлена версия {currentVersion.ToString(3)}.\n\nСкачать официальный установщик и запустить обновление? Настройки и папки резервных копий хранятся отдельно.",
+                $"Доступна German OS Backup {latestVersion}. Сейчас установлена версия {currentVersion.ToString(3)}.\n\nСкачать официальный установщик и запустить обновление? Настройки и папки резервных копий хранятся отдельно.",
                 "Доступно обновление", MessageBoxButtons.YesNo, MessageBoxIcon.Information) != DialogResult.Yes) return;
             var installerPath = Path.Combine(Path.GetTempPath(), "GermanOSBackup-Setup-x64.exe");
             details("Скачиваем установщик версии " + latestVersion + "…");
@@ -493,7 +493,7 @@ internal sealed class DashboardForm : Form
     {
         try
         {
-            if (!File.Exists(path)) File.WriteAllText(path, "German OS Backup C# Edition log");
+            if (!File.Exists(path)) File.WriteAllText(path, "German OS Backup log");
             Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
         }
         catch { }
