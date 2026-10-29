@@ -286,7 +286,7 @@ internal sealed class DashboardForm : Form
                 MessageBox.Show(this, "GitHub не вернул корректный номер версии.", "Проверка обновлений", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
-            var rawCurrentVersion = typeof(Program).Assembly.GetName().Version ?? new Version(1, 3, 1);
+            var rawCurrentVersion = typeof(Program).Assembly.GetName().Version ?? new Version(1, 4, 3);
             var currentVersion = new Version(rawCurrentVersion.Major, Math.Max(0, rawCurrentVersion.Minor), Math.Max(0, rawCurrentVersion.Build));
             if (latestVersion <= currentVersion)
             {
@@ -483,7 +483,7 @@ internal sealed class DashboardForm : Form
             sourceCount = config.SelectedSources?.Count ?? 0,
             sourcePaths = config.SelectedSources ?? new List<string>(),
             autoUpdateSources = config.AutoUpdateSources ?? new List<string>(),
-            version = typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "1.4.2",
+            version = typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "1.4.3",
             cpuPercent = cpu,
             ramUsedGb = ram.UsedGb,
             ramTotalGb = ram.TotalGb,
